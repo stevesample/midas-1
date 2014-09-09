@@ -50,6 +50,7 @@ module.exports.policies = {
   UserEmailController : {
     '*': ['authenticated', 'requireUserId'],
     'find': ['authenticated', 'requireUserId', 'requireId', 'userEmailIdMatch'],
+    'findOne': ['authenticated', 'requireUserId', 'requireId', 'userEmailIdMatch'],
     'findAllByUserId': ['authenticated', 'requireUserId', 'requireId', 'user'],
     'create': ['authenticated', 'requireUserId', 'addUserId'],
     'update': ['authenticated', 'requireUserId', 'requireId', 'userEmailIdMatch'],
@@ -118,6 +119,7 @@ module.exports.policies = {
   TagController : {
     '*': ['authenticated'],
     'find': false,
+    'findOne': false,
     'create': ['authenticated', 'requireUserId', 'projectId', 'taskId', 'ownerOrAdmin'],
     'update': false,
     'destroy': ['authenticated', 'requireUserId', 'requireId'],
@@ -129,6 +131,7 @@ module.exports.policies = {
 
   CommentController : {
     'find': false,
+    'findOne': false,
     'create': ['authenticated', 'requireUserId', 'addUserId', 'projectId', 'taskId'],
     'update': ['authenticated', 'requireUserId', 'projectId', 'taskId'],
     'destroy': ['authenticated', 'requireUserId', 'requireId'],
@@ -152,6 +155,7 @@ module.exports.policies = {
 
   AttachmentController: {
     'find': ['authenticated', 'requireId'],
+    'findOne': ['authenticated', 'requireId'],
     'findAllByProjectId': ['authenticated', 'requireId', 'project'],
     'findAllByTaskId': ['authenticated', 'requireId', 'task'],
     'create': ['authenticated', 'requireUserId', 'addUserId'],
