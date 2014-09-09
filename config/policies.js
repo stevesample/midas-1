@@ -40,6 +40,7 @@ module.exports.policies = {
     'update': ['authenticated', 'requireUserId', 'requireId'],
     'username': ['authenticated'],
     'find': ['authenticated', 'requireUserId'],
+    'findOne': ['authenticated', 'requireUserId'],
     'activities': ['authenticated'],
     'disable': ['authenticated', 'requireId', 'requireUserId'],
     'enable': ['authenticated', 'requireId', 'requireUserId', 'admin'],
@@ -69,6 +70,7 @@ module.exports.policies = {
   ProjectController : {
     '*': ['authenticated', 'addUserId', 'project'],
     'find': ['authenticated', 'requireId', 'project'],
+    'findOne': ['authenticated', 'requireId', 'project'],
     'update': ['authenticated', 'requireUserId', 'requireId', 'project', 'ownerOrAdmin'],
     'destroy': ['authenticated', 'requireUserId', 'requireId', 'project', 'ownerOrAdmin']
   },
@@ -103,6 +105,7 @@ module.exports.policies = {
   EventController : {
     '*': false,
     'find': ['authenticated'],
+    'findOne': ['authenticated'],
     'create': ['authenticated', 'requireUserId', 'addUserId', 'projectId', 'eventUuid'],
     'update': ['authenticated', 'requireUserId', 'projectId'],
     'findAllByProjectId': ['authenticated', 'addUserId', 'requireId', 'project'],
@@ -140,6 +143,7 @@ module.exports.policies = {
 
   TaskController : {
     'find': ['authenticated', 'task'],
+    'findOne': ['authenticated', 'task'],
     'findAllByProjectId': ['authenticated', 'requireId', 'project'],
     'create': ['authenticated', 'requireUserId', 'addUserId'],
     'update': ['authenticated', 'requireUserId', 'requireId', 'projectId', 'task', 'ownerOrAdmin'],

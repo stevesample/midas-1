@@ -32,6 +32,10 @@ module.exports = {
     });
   },
 
+  findOne: function(req, res) {
+    module.exports.find(req, res);
+  },
+
   findAllByProjectId: function (req, res) {
     Task.findByProjectId(req.params.id)
     .sort({'updatedAt': -1})

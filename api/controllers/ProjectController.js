@@ -20,6 +20,10 @@ module.exports = {
     });
   },
 
+  findOne: function(req, res) {
+    module.exports.find(req, res);
+  },
+
   // Namespace the find() method that returns the array of objects into
   // a familiar findAll method.
   findAll: function (req, res) {

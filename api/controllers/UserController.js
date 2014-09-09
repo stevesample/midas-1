@@ -125,6 +125,10 @@ module.exports = {
     });
   },
 
+  findOne: function(req, res) {
+    module.exports.find(req, res);
+  },
+
   update: function (req, res) {
     return update(req, res);
   },
