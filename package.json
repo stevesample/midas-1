@@ -25,6 +25,7 @@
         "nodemailer": "0.6.x",
         "email-templates": "~0.1.5",
         "git-rev": "0.2.x",
+        "sails-build-dictionary": "0.10.1",
         "sails-disk": "~0.10.3",
         "sails-postgresql": "~0.10.8"
     },
