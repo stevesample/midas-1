@@ -13,12 +13,14 @@ var userUtils = require('../services/utils/user');
  * remote server.
  */
 function authenticate (req, res, strategy, json) {
+  if (req.user && json) req.logout();
   if (req.user) {
     passport.authorize(strategy, function (err, user, info)
     {
       if (json) {
         res.send(userUtils.cleanUser(req.user, req.user.id));
       } else {
+        if (info && info.message) req.flash('message', info.message);
         res.redirect('/profile/edit');
       }
       return;
@@ -29,8 +31,7 @@ function authenticate (req, res, strategy, json) {
       }
     });
   } else {
-    passport.authenticate(strategy, function (err, user, info)
-    {
+    passport.authenticate(strategy, function (err, user, info) {
       if ((err) || (!user))
       {
         var message = '';
@@ -74,7 +75,8 @@ function authenticate (req, res, strategy, json) {
           res.send(userUtils.cleanUser(user, user.id));
         }
         else {
-          res.redirect('/projects');
+          res.redirect(req.session.logged_in_path || sails.config.ui.home.logged_in_path);
+          delete req.session.logged_in_path;
         }
         return;
       });
@@ -85,7 +87,7 @@ function authenticate (req, res, strategy, json) {
       }
     });
   }
-};
+}
 
 module.exports = {
   /**
@@ -209,9 +211,19 @@ module.exports = {
             // destroy the existing token
             validToken.destroy(function (err) {
               if (err) { return res.send(400, { message: 'Error destroying existing token'}); }
-              // success, return true
-              return res.send(true);
-            })
+              // Reset login
+              validUser.passwordAttempts = 0;
+              validUser.save(function(err, user) {
+                if (err) {
+                  return res.send(400, {
+                    message: 'Error resetting passwordAttempts',
+                    error: err
+                  });
+                }
+                // success, return true
+                return res.send(true);
+              });
+            });
           });
         });
       });
@@ -223,10 +235,15 @@ module.exports = {
    */
   oauth: function (req, res) {
     var target = req.route.params.id;
-    if (!target || target == '' || !_.contains(sails.config.auth.config.oauth, target)) {
+    if (!target || target === '' || !_.contains(sails.config.auth.config.oauth, target)) {
       return res.send(403, { message: "Unsupported OAuth method." });
-    };
-    var config = sails.config.auth.config.config;
+    }
+    var config = sails.config.auth.config.config,
+        path = req.headers.referer.split('://')[1].split(req.headers.host)[1];
+
+    // Set referer path for redirection after authentication
+    req.session.logged_in_path = path;
+
     passport.authenticate(target, config[target].params || null)(req, res, function (err) {
       if (err) {
         sails.log.error('Authentication Error:', err);
@@ -240,9 +257,9 @@ module.exports = {
    */
   callback: function (req, res) {
     var target = req.route.params.id;
-    if (!target || target == '' || !_.contains(sails.config.auth.config.oauth, target)) {
+    if (!target || target === '' || !_.contains(sails.config.auth.config.oauth, target)) {
       return res.send(403, { message: "Unsupported OAuth method." });
-    };
+    }
     authenticate(req, res, target, false);
   },
 
@@ -260,7 +277,7 @@ module.exports = {
     if (req.param('json')) {
       res.send({ logout: true });
     } else {
-      res.redirect('/projects');
+      res.redirect(sails.config.ui.home.logged_in_path);
     }
   }
 

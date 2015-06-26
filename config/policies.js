@@ -1,3 +1,5 @@
+console.log('Loading... ', __filename);
+
 /**
  * Policies are simply Express middleware functions which run before your controllers.
  * You can apply one or more policies for a given controller or action.
@@ -32,27 +34,44 @@ module.exports.policies = {
     '*': true
   },
 
+  UserAuthController: {
+    '*': ['authenticated', 'requireUserId', 'requireId', 'userAuthIdMatch']
+  },
+
   // Limit user controller view to just the /user endpoint
   UserController : {
     '*': false,
+    'profile': ['authenticated'],
     'photo': ['authenticated', 'requireId'],
     'info': ['authenticated', 'requireId'],
     'update': ['authenticated', 'requireUserId', 'requireId'],
     'username': ['authenticated'],
     'find': ['authenticated', 'requireUserId'],
+    'all': ['authenticated', 'requireUserId'],
+    'findOne': ['authenticated', 'requireUserId'],
     'activities': ['authenticated'],
     'disable': ['authenticated', 'requireId', 'requireUserId'],
     'enable': ['authenticated', 'requireId', 'requireUserId', 'admin'],
-    'resetPassword': ['authenticated', 'requireUserId']
+    'resetPassword': ['authenticated', 'requireUserId'],
+    'emailCount': ['test'],
+    'export': ['authenticated', 'admin']
   },
 
   UserEmailController : {
     '*': ['authenticated', 'requireUserId'],
     'find': ['authenticated', 'requireUserId', 'requireId', 'userEmailIdMatch'],
+    'findOne': ['authenticated', 'requireUserId', 'requireId', 'userEmailIdMatch'],
     'findAllByUserId': ['authenticated', 'requireUserId', 'requireId', 'user'],
     'create': ['authenticated', 'requireUserId', 'addUserId'],
     'update': ['authenticated', 'requireUserId', 'requireId', 'userEmailIdMatch'],
     'destroy': ['authenticated', 'requireUserId', 'requireId', 'userEmailIdMatch'],
+  },
+
+  UserSettingController : {
+    '*': ['authenticated', 'requireUserId', 'addUserId'],
+    'find': ['authenticated', 'requireUserId', 'addUserId'],
+    'findOne': ['authenticated', 'requireUserId', 'addUserId'],
+    'destroy': ['authenticated', 'requireUserId', 'requireId','userSettingIdMatch']
   },
 
   // Disable the index blueprints for FileController due to security concerns
@@ -69,6 +88,7 @@ module.exports.policies = {
   ProjectController : {
     '*': ['authenticated', 'addUserId', 'project'],
     'find': ['authenticated', 'requireId', 'project'],
+    'findOne': ['authenticated', 'requireId', 'project'],
     'update': ['authenticated', 'requireUserId', 'requireId', 'project', 'ownerOrAdmin'],
     'destroy': ['authenticated', 'requireUserId', 'requireId', 'project', 'ownerOrAdmin']
   },
@@ -98,37 +118,29 @@ module.exports.policies = {
   VolunteerController : {
     '*': false,
     'create': ['authenticated', 'requireUserId', 'addUserId'],
+    'destroy': ['authenticated', 'requireId', 'ownerOrAdmin'],
   },
 
   EventController : {
     '*': false,
     'find': ['authenticated'],
+    'findOne': ['authenticated'],
     'create': ['authenticated', 'requireUserId', 'addUserId', 'projectId', 'eventUuid'],
     'update': ['authenticated', 'requireUserId', 'projectId'],
     'findAllByProjectId': ['authenticated', 'addUserId', 'requireId', 'project'],
     'attend': ['authenticated', 'requireUserId', 'addUserId', 'requireId'],
     'cancel': ['authenticated', 'requireUserId', 'addUserId', 'requireId'],
     'rsvp': ['authenticated', 'requireUserId', 'addUserId'],
-    'ical': ['authenticated', 'addUserId', 'project']
-  },
-
-  TagController : {
-    '*': ['authenticated'],
-    'find': false,
-    'create': ['authenticated', 'requireUserId', 'projectId', 'taskId', 'ownerOrAdmin'],
-    'update': false,
-    'destroy': ['authenticated', 'requireUserId', 'requireId'],
-    'add': ['authenticated', 'requireUserId'],
-    'findAllByProjectId': ['authenticated', 'requireId', 'project'],
-    'findAllByTaskId': ['authenticated', 'requireId', 'task']
-    //'findAllByUserId': not needed because authenticated is default
+    'ical': ['authenticated', 'addUserId', 'project'],
+    'destroy': ['authenticated', 'requireId', 'admin']
   },
 
   CommentController : {
     'find': false,
+    'findOne': false,
     'create': ['authenticated', 'requireUserId', 'addUserId', 'projectId', 'taskId'],
     'update': ['authenticated', 'requireUserId', 'projectId', 'taskId'],
-    'destroy': ['authenticated', 'requireUserId', 'requireId'],
+    'destroy': ['authenticated', 'requireUserId', 'requireId', 'admin'],
     'findAllByProjectId': ['authenticated', 'requireId', 'project'],
     'findAllByTaskId': ['authenticated', 'requireId', 'task']
   },
@@ -140,14 +152,18 @@ module.exports.policies = {
 
   TaskController : {
     'find': ['authenticated', 'task'],
+    'findOne': ['authenticated', 'task'],
     'findAllByProjectId': ['authenticated', 'requireId', 'project'],
+    'copy': ['authenticated', 'requireUserId', 'addUserId'],
     'create': ['authenticated', 'requireUserId', 'addUserId'],
     'update': ['authenticated', 'requireUserId', 'requireId', 'projectId', 'task', 'ownerOrAdmin'],
-    'destroy': ['authenticated', 'requireUserId', 'requireId', 'task', 'ownerOrAdmin']
+    'destroy': ['authenticated', 'requireUserId', 'requireId', 'task', 'ownerOrAdmin'],
+    'export': ['authenticated', 'admin']
   },
 
   AttachmentController: {
     'find': ['authenticated', 'requireId'],
+    'findOne': ['authenticated', 'requireId'],
     'findAllByProjectId': ['authenticated', 'requireId', 'project'],
     'findAllByTaskId': ['authenticated', 'requireId', 'task'],
     'create': ['authenticated', 'requireUserId', 'addUserId'],

@@ -340,10 +340,10 @@ footer a {
 .navigation .navbar-brand {
   background-image: url(/images/logo.png);
   background-repeat: no-repeat;
-  background-size: 256px 40px;
+  background-position: left center;
   width: 256px;
-  height: 40px;
-  margin-top: 15px;
+  height: 60px;
+  margin-top: 6px;
 }
 
 @media only screen and (-moz-min-device-pixel-ratio: 1.5),
@@ -384,17 +384,12 @@ footer a {
 .navbar-default .navbar-nav > li > a:hover,
 .navbar-default .navbar-nav > li > a:focus {
   color: #dd361a;
-  background-color: transparent;
-}
-
-.navbar-default .navbar-nav > .active > a,
-.navbar-default .navbar-nav > .active > a:hover,
-.navbar-default .navbar-nav > .active > a:focus {
-  /*color: #ffffff;*/
   background-color: #f0f0f0;
 }
 
-.navbar .navbar-nav > .active > a {
+.navbar .navbar-nav > .active > a,
+.navbar .navbar-nav > .active > a:hover,
+.navbar .navbar-nav > .active > a:focus {
   color: #fff;
   background-color: #D63A25;
 }

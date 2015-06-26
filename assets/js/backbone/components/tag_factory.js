@@ -4,106 +4,63 @@
  * Options:
  *
  */
-define([
-  'jquery',
-  'underscore',
-  'backbone',
-  'async',
-  'utilities',
-  'marked',
-  'base_component',
-  'jquery.selection'
-], function ($, _, Backbone, async, utils, marked, BaseComponent, jqSelection ) {
 
-  Application.Component.TagFactory = BaseComponent.extend({
+var _ = require('underscore');
+var Backbone = require('backbone');
+var async = require('async');
+var utils = require('../mixins/utilities');
+var marked = require('marked');
+var BaseComponent = require('../base/base_component');
+var jqSelection = require('../../vendor/jquery.selection');
 
-  	initialize: function (options) {
-      this.options = options;
 
-      return this;
-    },
+TagFactory = BaseComponent.extend({
 
-    addTagEntities: function (tag, context, done) {
-    	//assumes
-    	//  tag -- array of tag objects to add
-    	//  tagType -- string specifying type for tagEntity table
-      var self = this;
+	initialize: function (options) {
+    this.options = options;
 
-    	//this is current solution to mark a tag object as on the fly added
-        if ( typeof tag.unmatched == 'undefined' || !tag.unmatched ){
-          return done();
-        }
-      //remove the flag that marks them as new
-      delete tag.unmatched;
+    return this;
+  },
 
-      $.ajax({
-        url: '/api/tagEntity',
-        type: 'POST',
-        data: {
-          type: tag.tagType,
-          name: tag.id
-        },
-        success: function (data){
-          context.data.newTag     = data;
-          context.data.newItemTags.push(data);
-          return done();
-        }
-      });
-    },
+  addTagEntities: function (tag, context, done) {
+  	//assumes
+  	//  tag -- array of tag objects to add
+  	//  tagType -- string specifying type for tagEntity table
+    var self = this;
 
-    removeTag: function (id, done) {
-      $.ajax({
-        url: '/api/tag/' + id,
-        type: 'DELETE',
-        success: function (data) {
-          return done();
-        }
-      });
-    },
-
-    addTag: function (tag, modelId, modelType, done) {
-    	//assumes
-    	//  tag -- array of tag objects to add
-    	//  --- NYI ---
-    	//  project or task id - string
-      // TODO: abstract the below if-else to a different function so this funciton just takes an array tag ids
-
-      var tagMap = {};
-      tagMap[modelType] = modelId;
-
-      if ( _.isFinite(tag) ){  
-          // --- NYI ---
-          // or project id
-        
-          tagMap.tagId = tag;
-      } else {
-          // --- NYI ---
-          // or project id
-
-          tagMap.tagId = tag.id;
+  	//this is current solution to mark a tag object as on the fly added
+      if ( !tag || typeof tag.unmatched == 'undefined' || !tag.unmatched ){
+        return done();
       }
+    //remove the flag that marks them as new
+    delete tag.unmatched;
 
-      $.ajax({
-        url: '/api/tag',
-        type: 'POST',
-        data: tagMap,
-        success: function (data) {
-          return done();
-        },
-        error: function (err) {
-          return done(err);
+    $.ajax({
+      url: '/api/tagEntity',
+      type: 'POST',
+      data: {
+        type: tag.tagType,
+        name: tag.id,
+        data: tag.data
+      },
+      success: function (data){
+        if (context.data) {
+          context.data.newTag = data;
+          context.data.newItemTags.push(data);
         }
-      });
+        return done(null, data);
+      }
+    });
+  },
 
-    },
-
-    createTagDropDown: function(options) {
-
-        self.$(options.selector).select2({
+  createTagDropDown: function(options) {
+    var settings = {
           placeholder: "Start typing to select a "+options.type,
           minimumInputLength: 2,
           multiple: true,
+          selectOnBlur: true,
           width: options.width || "500px",
+          tokenSeparators: options.tokenSeparators || [],
           formatResult: function (obj, container, query) {
             return obj.name;
           },
@@ -112,7 +69,16 @@ define([
           },
           createSearchChoice: function (term) {
             //unmatched = true is the flag for saving these "new" tags to tagEntity when the opp is saved
-            return { unmatched: true,tagType: options.type,id: term, value: term, name: "<b>"+term+"</b> <i>click to create a new tag with this value</i>" };
+            return {
+              unmatched: true,
+              tagType: options.type,
+              id: term,
+              value: term,
+              temp: true,
+              name: "<b>"+term+"</b> <i>" + ((options.type !== 'location') ?
+                "click to create a new tag with this value" :
+                "search for this location") + "</i>"
+            };
           },
           ajax: {
             url: '/api/ac/tag',
@@ -124,57 +90,101 @@ define([
               };
             },
             results: function (data) {
-              return { results: data }
+              return { results: data };
             }
           }
-        }).on("select2-selecting", function (e){
-          if ( e.choice.hasOwnProperty("unmatched") && e.choice.unmatched ){
-            //remove the hint before adding it to the list
-            e.choice.name = e.val; 
-          } 
-        });
-
-      },
-
-      createDiff: function ( oldTags, currentTags){
-        //sort tags into their needed actions
-        //
-
-        var out = {
-          remove: [],
-          add: [],
-          none: []
-        };
-
-        var none = null;
-        
-        _.each(oldTags, function (oTag,oi){  
-
-          none = null;
-
-          _.each(currentTags, function (cTag, ci){
-              if ( parseInt(cTag.id) == oTag.tagId ){
-                currentTags.splice(ci,1);
-                none = oi;
-              }
+        },
+      $sel = self.$(options.selector);
+    $sel.remote = true;
+    $sel.select2(settings).on("select2-selecting", function (e) {
+      if (e.choice.tagType === 'location') {
+        var $el = self.$(e.currentTarget);
+        if (e.choice.temp) {
+          e.choice.name = '<em>Searching for <strong>' +
+            e.choice.value + '</strong></em>';
+          this.temp = true;
+          $.get('/api/location/suggest?q=' + e.choice.value, function(d) {
+            d = _(d).map(function(item) {
+              return {
+                id: item.name,
+                name: item.name,
+                unmatched: true,
+                tagType: 'location',
+                data: _(item).omit('name')
+              };
             });
+            var items = $sel.select2('data');
+            this.cache = _.reject(items, function(item) {
+              return (item.name.indexOf('<em>Searching for <strong>') >= 0);
+            });
+            $sel.select2({
+              multiple: true,
+              data: { results: d, text: 'name' }
+            }).select2('data', this.cache).select2('open');
+            $sel.remote = false;
+          });
+        } else {
+          this.reload = true;
+          delete this.temp;
+        }
+      } else {
+        if ( e.choice.hasOwnProperty("unmatched") && e.choice.unmatched ){
+          //remove the hint before adding it to the list
+          e.choice.name = e.val;
+        }
+      }
+    }).on('select2-blur', function(e) {
+      if (!this.reload && this.temp) {
+        this.reload = true;
+        delete this.temp;
+      }
+    }).on('select2-open', function(e) {
+      var el = this;
+      if (this.reload) {
+        this.cache = $sel.select2('data');
+        setTimeout(function(){
+          $sel.select2(settings).select2('data', el.cache).select2('open');
+        }, 0);
+        delete this.reload;
+      }
+    });
+  },
 
-          if( _.isFinite(none) ){
-            out.none.push(parseInt(oldTags[none].tagId));
-          } else {
-            out.remove.push(parseInt(oTag.id));
+  createDiff: function ( oldTags, currentTags){
+    //sort tags into their needed actions
+    //
+
+    var out = {
+      remove: [],
+      add: [],
+      none: []
+    };
+
+    var none = null;
+
+    _.each(oldTags, function (oTag,oi){
+
+      none = null;
+
+      _.each(currentTags, function (cTag, ci){
+          if (cTag && parseInt(cTag.id) == oTag.tagId ){
+            currentTags.splice(ci,1);
+            none = oi;
           }
         });
 
-        out.add = currentTags;
-
-        return out; 
+      if( _.isFinite(none) ){
+        out.none.push(parseInt(oldTags[none].tagId));
+      } else {
+        out.remove.push(parseInt(oTag.id));
       }
+    });
 
-  });
+    out.add = currentTags;
 
-return Application.Component.TagFactory;
+    return out;
+  }
+
 });
 
-
-
+module.exports = TagFactory;

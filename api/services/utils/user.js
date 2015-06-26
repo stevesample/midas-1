@@ -4,6 +4,29 @@ var async = require('async');
 var tagUtils = require('./tag');
 var noteUtils = require('../notifications/manager');
 
+var sendWelcomeEmail = function(done, user) {
+  // Generate a notification email to the user
+  var params = {
+    trigger: {
+      callerType: 'UserEmail',
+      callerId: user.id,
+      action: 'welcomeUser'
+    },
+    data: {
+      audience: {
+        'user': {
+          fields: {
+            userId: user.id
+          }
+        }
+      }
+    }
+  };
+  noteUtils.notifier.notify(params, function (err) {
+    done(err, user);
+  });
+};
+
 module.exports = {
 
   /**
@@ -47,7 +70,7 @@ module.exports = {
     .where({ userId: id })
     .where({ isPrimary: true })
     .sort({ updatedAt: -1 })
-    .done(function (err, userEmail) {
+    .exec(function (err, userEmail) {
       if (err) { return done(err, null); }
       // if there's no results from `isPrimary`, get the
       // last email address added
@@ -56,7 +79,7 @@ module.exports = {
         UserEmail.findOne()
         .where({ userId: id })
         .sort({ createdAt: -1 })
-        .done(function (err, userEmail) {
+        .exec(function (err, userEmail) {
           if (err) { return done(err, null); }
           return done(null, userEmail);
         });
@@ -64,6 +87,28 @@ module.exports = {
         return done(null, userEmail);
       }
     });
+  },
+
+  /**
+   * Fetch usersettings
+   *
+   * @param userId
+   * @param done call back, returns settings as an object ( settings.key=obj )
+   *             this way properties are accesible thusly settings.supervisorEmail.value
+   *             and they can be deleted easily because the id is present
+   */
+  getUserSettings: function (userId, done){
+    var userSetting = {};
+
+    UserSetting.findByUserId(userId)
+      .exec(function(err,settings){
+        if (err) { return done(err, null); }
+        _.each(settings,function(setting){
+          userSetting[setting.key]=setting;
+        });
+
+        return done(null,userSetting);
+      });
   },
 
   /**
@@ -131,7 +176,7 @@ module.exports = {
           result.agency = [ userObj.company ];
         }
         return result;
-      };
+      }
 
       // no user, create one
       if (!user) {
@@ -157,7 +202,7 @@ module.exports = {
           if (updateAction) {
             userCreateParam = userData;
           }
-          User.create(userCreateParam).done(function (err, user) {
+          User.create(userCreateParam).exec(function (err, user) {
             if (err) {
               sails.log.debug('User creation error:', err);
               return done(null, false, { message: 'Unable to create new user. Please try again.'});
@@ -168,7 +213,7 @@ module.exports = {
               password: hash
             };
             // Store the user's password with the bcrypt hash
-            UserPassword.create(pwObj).done(function (err, pwObj) {
+            UserPassword.create(pwObj).exec(function (err, pwObj) {
               if (err) { return done(null, false, { message: 'Unable to store password.'}); }
               // if the username is an email address, store it
               if (validator.isEmail(userData.username) !== true) {
@@ -176,16 +221,17 @@ module.exports = {
                 return done(null, user);
               }
               var email = {
-                userId: user['id'],
+                userId: user.id,
                 email: userData.username,
               };
               // Store the email address
               var tags = create_tag_obj(providerUser);
-              UserEmail.create(email).done(function (err, email) {
+              UserEmail.create(email).exec(function (err, email) {
                 if (err) { return done(null, false, { message: 'Unable to store user email address.', err: err }); }
                 tagUtils.findOrCreateTags(user.id, tags, function (err, newTags) {
                   if (err) { return done(null, false, { message: 'Unabled to create tags', err: err }); }
-                  return done(null, user);
+                  // Generate welcome email
+                  sendWelcomeEmail(done, user);
                 });
               });
             });
@@ -235,11 +281,7 @@ module.exports = {
             for (var i in newTags) {
               newTagIds.push(newTags[i].id);
             }
-            // Prune old tags
-            tagUtils.pruneTags(user.id, newTagIds, function (err, removedTags) {
-              sails.log.debug('Prune Tags:', removedTags);
-              cbTagUpdate(err);
-            });
+            cbTagUpdate();
           });
         };
 
@@ -318,7 +360,7 @@ module.exports = {
         .limit(1)
         .exec(function (err, pwObj) {
           // If no password is set or there is an error, abort
-          if (err || !pwObj || pwObj.length == 0) { return done(null, false, { message: 'Invalid email address or password.'}); }
+          if (err || !pwObj || pwObj.length === 0) { return done(null, false, { message: 'Invalid email address or password.'}); }
           // Compare the passwords to check if it is correct
           bcrypt.compare(userData.password, pwObj[0].password, function (err, res) {
             // Valid password
@@ -442,7 +484,7 @@ module.exports = {
         '>': expiry
       }
     })
-    .done(function (err, tokens) {
+    .exec(function (err, tokens) {
       if (err) { return cb(err, false, null); }
       var valid = false;
       var validToken = null;
@@ -502,10 +544,7 @@ module.exports = {
         for (var i in newTags) {
           newTagIds.push(newTags[i].id);
         }
-        // Prune old tags
-        tagUtils.pruneTags(userId, newTagIds, function (err, removedTags) {
-          cbTagUpdate(err);
-        });
+        cbTagUpdate();
       });
     };
 
@@ -516,39 +555,39 @@ module.exports = {
       // If the user's authentication tokens don't exist
       // then add the authentication tokens and update the user profile
       if (userAuth.length === 0) {
-        var user = {
+        var userMatch = {
           name: providerUser.displayName,
           photoUrl: providerUser.photoUrl,
           title: providerUser.title,
           bio: providerUser.bio
         };
         if (providerUser.emails && (providerUser.emails.length > 0)) {
-          user.username = providerUser.emails[0].value.toLowerCase();
+          userMatch.username = providerUser.emails[0].value.toLowerCase();
         }
 
         // Utility function that completes the oauth user creation/update process
         // Stores the credentials and the user's other profile data
         var user_cb = function(err, user) {
           var creds = {
-            userId: user['id'],
+            userId: user.id,
             provider: provider,
             providerId: providerUser.id,
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken,
           };
           // store login credentials
-          UserAuth.create(creds).done(function (err, creds) {
+          UserAuth.create(creds).exec(function (err, creds) {
             if (err) { return done(null, false, { message: 'Unable to store user credentials.' }); }
             sails.log.debug('Created Credentials:', creds);
             // Store emails if they're available
             if (providerUser.emails && (providerUser.emails.length > 0)) {
               var email = {
-                userId: user['id'],
+                userId: user.id,
                 email: providerUser.emails[0].value.toLowerCase(),
               };
               UserEmail.findOne(email, function (err, storedEmail) {
                 if (storedEmail) { return done(null, user); }
-                UserEmail.create(email).done(function (err, email) {
+                UserEmail.create(email).exec(function (err, email) {
                   if (err) { return done(null, false, { message: 'Unable to store user email address.' }); }
                   sails.log.debug('Created Email:', email);
                   return done(null, user);
@@ -559,56 +598,67 @@ module.exports = {
             }
           });
         };
+        var email = (providerUser.emails && providerUser.emails.length) ?
+              providerUser.emails[0].value.toLowerCase() : undefined,
+            user = (req.user) ? req.user[0] : undefined;
+        User.findOne({ username: email }).exec(function(err, foundUser) {
+          if (err) { return done(null, false, { message: 'Unable to find existing users.' }); }
 
-        // if this user is logged in, then we're adding a new
-        // service for them.  Update their user model fields if they
-        // aren't already set.
-        if (req.user) {
-          if (req.user[0].disabled === true) {
-            return done(null, false, { message: 'Your account is disabled.' });
-          }
-          var update = false;
-          if (providerUser.overwrite || (!req.user[0].photoId && !req.user[0].photoUrl && providerUser.photoUrl)) {
-            req.user[0].photoUrl = providerUser.photoUrl || null;
-            update = true;
-          }
-          if (providerUser.overwrite || (!req.user[0].bio && providerUser.bio)) {
-            req.user[0].bio = providerUser.bio || null;
-            update = true;
-          }
-          if (providerUser.overwrite || (!req.user[0].title && providerUser.title)) {
-            req.user[0].title = providerUser.title || null;
-            update = true;
-          }
+          if (!user && foundUser) user = foundUser;
 
-          if (update === true) {
-            req.user[0].save(function (err) {
-              if (err) { return done(null, false, { message: 'Unable to update user information.' }); }
+          // If this user is logged in or already exists, then we're adding a new
+          // service for them. Update their user model fields if they aren't already set.
+          if (user) {
+            if (user.disabled === true) {
+              return done(null, false, { message: 'Your account is disabled. Please contact ' + sails.config.systemEmail });
+            }
+            var update = false;
+            if (providerUser.overwrite || (!user.photoId && !user.photoUrl && providerUser.photoUrl)) {
+              user.photoUrl = providerUser.photoUrl || null;
+              update = true;
+            }
+            if (providerUser.overwrite || (!user.bio && providerUser.bio)) {
+              user.bio = providerUser.bio || null;
+              update = true;
+            }
+            if (providerUser.overwrite || (!user.title && providerUser.title)) {
+              user.title = providerUser.title || null;
+              update = true;
+            }
+
+            if (update === true) {
+              user.save(function (err) {
+                if (err) { return done(null, false, { message: 'Unable to update your information.' }); }
+                // check if tags should be updated
+                checkTagUpdate(user.id, providerUser, function (err) {
+                  return user_cb(err, user);
+                });
+              });
+            // user object has not been updated, check tags
+            } else {
               // check if tags should be updated
-              checkTagUpdate(req.user[0].id, providerUser, function (err) {
-                return user_cb(err, req.user[0]);
+              checkTagUpdate(user.id, providerUser, function (err) {
+                return user_cb(err, user);
+              });
+            }
+          }
+          // create user because the user is not logged in
+          else {
+            User.create(userMatch).exec(function (err, user) {
+              sails.log.debug('Created User: ', user);
+              if (err) { return done(null, false, { message: 'Unable to create your account.' }); }
+              var tags = create_tag_obj(providerUser);
+              // Update the user's tags
+              tagUtils.findOrCreateTags(user.id, tags, function (err, newTags) {
+                if (err) { return done(null, false, { message: 'Unabled to create tags', err: err }); }
+                // Generate a notification email to the user
+                sendWelcomeEmail(function() {
+                  user_cb(null, user);
+                }, user);
               });
             });
-          // user object has not been updated, check tags
-          } else {
-            // check if tags should be updated
-            checkTagUpdate(req.user[0].id, providerUser, function (err) {
-              return user_cb(err, req.user[0]);
-            });
           }
-        }
-        // create user because the user is not logged in
-        else {
-          User.create(user).done(function (err, user) {
-            sails.log.debug('Created User: ', user);
-            if (err) { return done(null, false, { message: 'Unable to create user.' }); }
-            var tags = create_tag_obj(providerUser);
-            // Update the user's tags
-            tagUtils.findOrCreateTags(user.id, tags, function (err, newTags) {
-              user_cb(null, user);
-            });
-          });
-        }
+        });
       }
       // The user has authentication tokens already for this provider, update them.
       else {
@@ -619,9 +669,16 @@ module.exports = {
         userAuth.save(function (err) {
           if (err) { return done(null, false, { message: 'Unable to update user credentials.' }); }
           // acquire user model and authenticate
-          User.findOneById(userAuth['userId'], function (err, user) {
+          User.findOneById(userAuth.userId, function (err, user) {
             if (!user || err) { return done(null, false, { message: 'Error looking up user.' }); }
             sails.log.debug('User Found:', user);
+            if (req.user && req.user[0] && req.user[0].id !== user.id) {
+              return done(null, false, {
+                message: 'We\'re sorry, you can\'t connect that ' +
+                  sails.config.auth.config.config[userAuth.provider].name +
+                  ' account since it is already connected to a different profile.'
+              });
+            }
 
             var update = false;
             if (providerUser.overwrite || (user.photoId && !user.photoUrl && providerUser.photoUrl)) {
@@ -667,16 +724,17 @@ module.exports = {
   cleanUser: function (user, reqId) {
     var u = {
       id: user.id,
-      username: null,
+      username: user.username,
       name: user.name,
       title: user.title,
       bio: user.bio,
+      tags: user.tags,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     };
     // if the requestor is the same as the user, show admin status
     if (user.id === reqId) {
-      u.isAdmin = user.isAdmin
+      u.isAdmin = user.isAdmin;
     }
     return u;
   },
@@ -687,81 +745,59 @@ module.exports = {
    * @param userId: the id of the user to query
    * @param reqId: the requester's id
    */
-  getUser: function (userId, reqId, cb) {
-    var self = this;
+  getUser: function (userId, reqId, reqUser, cb) {
+    var self = this,
+        admin = (reqUser && reqUser[0] && reqUser[0].isAdmin) ? true : false;
     if (!_.isFinite(userId)) {
       return cb({ message: 'User ID must be a numeric value' }, null);
     }
-    User.findOneById(userId, function (err, user) {
+    if (typeof reqUser === 'function') {
+      cb = reqUser;
+      reqUser = undefined;
+    }
+    User.findOne({ id: userId }).populate('tags').exec(function (err, user) {
       if (err) { return cb(err, null); }
       delete user.deletedAt;
       if (userId != reqId) {
         user = self.cleanUser(user, reqId);
       }
-      tagUtils.assemble({ userId: userId }, function (err, tags) {
+      user.location = _.findWhere(user.tags, { type: 'location' });
+      user.agency = _.findWhere(user.tags, { type: 'agency' });
+      Like.countByTargetId(userId, function (err, likes) {
         if (err) { return cb(err, null); }
-        for (i in tags) {
-          delete tags[i].projectId;
-          delete tags[i].taskId;
-          delete tags[i].updatedAt;
-          delete tags[i].deletedAt;
-          delete tags[i].userId;
-          delete tags[i].tag.createdAt;
-          delete tags[i].tag.updatedAt;
-          delete tags[i].tag.deletedAt;
-          if (tags[i].tag.type == 'agency') {
-            if (!user.agency) {
-              user.agency = tags[i];
-            } else {
-              // always use the latest tag stored, in case multiple are stored
-              if (user.agency.createdAt < tags[i].createdAt) {
-                user.agency = tags[i];
-              }
-            }
-          }
-          if (tags[i].tag.type == 'location') {
-            if (!user.location) {
-              user.location = tags[i];
-            } else {
-              // always use the latest tag stored, in case multiple are stored
-              if (user.location.createdAt < tags[i].createdAt) {
-                user.location = tags[i];
-              }
-            }
-          }
-         }
-        user.tags = tags;
-        Like.countByTargetId(userId, function (err, likes) {
+        user.likeCount = likes;
+        user.like = false;
+        user.isOwner = false;
+        Like.findOne({ where: { userId: reqId, targetId: userId }}, function (err, like) {
           if (err) { return cb(err, null); }
-          user.likeCount = likes;
-          user.like = false;
-          user.isOwner = false;
-          Like.findOne({ where: { userId: reqId, targetId: userId }}, function (err, like) {
+          if (like) { user.like = true; }
+          // stop here if the requester id is not the same as the user id
+          if (userId != reqId && !admin) {
+            return cb(null, user);
+          }
+          // Look up which providers the user has authorized
+          UserAuth.findByUserId(userId, function (err, auths) {
             if (err) { return cb(err, null); }
-            if (like) { user.like = true; }
-            // stop here if the requester id is not the same as the user id
-            if (userId != reqId) {
-              return cb(null, user);
-            }
-            // Look up which providers the user has authorized
-            UserAuth.findByUserId(userId, function (err, auths) {
-              if (err) { return cb(err, null); }
-              user.auths = [];
-              for (var i = 0; i < auths.length; i++) {
-                user.auths.push(auths[i].provider);
-              }
-              // Look up the user's email addresses
-              UserEmail.findByUserId(userId, function (err, emails) {
-                if (err) { return cb(err, null); }
-                user.isOwner = true;
-                user.emails = [];
-                if (emails) { user.emails = emails; }
-                return cb(null, user);
+            user.auths = [];
+            for (var i = 0; i < auths.length; i++) {
+              user.auths.push({
+                provider: auths[i].provider,
+                id: auths[i].id,
+                token: auths[i].accessToken
               });
+            }
+            // Look up the user's email addresses
+            UserEmail.findByUserId(userId, function (err, emails) {
+              if (err) { return cb(err, null); }
+              user.isOwner = true;
+              user.emails = [];
+              if (emails) { user.emails = emails; }
+              return cb(null, user);
             });
           });
         });
       });
+
     });
   },
 
@@ -774,6 +810,7 @@ module.exports = {
   addUserName: function (ownerObj, done) {
     User.findOneById(ownerObj.userId, function (err, owner) {
       if (err) { return done(err); }
+      if (!owner) { return done(); }
       ownerObj.name = owner.name;
       return done();
     });
@@ -799,11 +836,11 @@ module.exports = {
     var _password = password.toLowerCase().trim();
     // check username is not the same as the password, in any case
     if (_username != _password && _username.split('@',1)[0] != _password) {
-      rules['username'] = true;
+      rules.username = true;
     }
     // length > 8 characters
     if (password && password.length >= 8) {
-      rules['length'] = true;
+      rules.length = true;
     }
     // Uppercase, Lowercase, and Numbers
     for (var i = 0; i < password.length; i++) {
@@ -811,19 +848,19 @@ module.exports = {
       // from http://stackoverflow.com/questions/3816905/checking-if-a-string-starts-with-a-lowercase-letter
       if (test === test.toLowerCase() && test !== test.toUpperCase()) {
         // lowercase found
-        rules['lower'] = true;
+        rules.lower = true;
       }
       else if (test === test.toUpperCase() && test !== test.toLowerCase()) {
-        rules['upper'] = true;
+        rules.upper = true;
       }
       // from http://stackoverflow.com/questions/18082/validate-numbers-in-javascript-isnumeric
       else if (!isNaN(parseFloat(test)) && isFinite(test)) {
-        rules['number'] = true;
+        rules.number = true;
       }
     }
     // check for symbols
     if (/.*[^\w\s].*/.test(password)) {
-      rules['symbol'] = true;
+      rules.symbol = true;
     }
     return rules;
   }

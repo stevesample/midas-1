@@ -6,45 +6,41 @@
  */
 var async = require('async');
 var util = require('./project');
-var tagUtil = require('./tag');
 var userUtil = require('./user');
 
-var authorized = function (id, userId, cb) {
-  Task.findOneById(id, function (err, task) {
+var authorized = function (id, userId, user, cb) {
+  if (typeof user === 'function') {
+    cb = user;
+    user = undefined;
+  }
+  Task.findOneById(id).populate('tags').exec(function (err, task) {
     if (err) { return cb('Error finding task.', null); }
     task.isOwner = false;
     // otherwise, check that we have an owner
     if (userId && (userId == task.userId)) {
       task.isOwner = true;
     }
-    // If not the owner, check if there is a project
+    // If not the owner, check if there is a public task
     if (!task.projectId) {
-      if ((task.state === 'public') || (task.state == 'closed') || (userId == task.userId)) {
+      if ((task.state !== 'draft') || (userId == task.userId) || (user && user.isAdmin)) {
         return cb(null, task);
       }
       return cb(null, null);
     }
     // check if the user is authorized for the project
-    // or the project is public
+    // or the project is open
     util.authorized(task.projectId, userId, function (err, proj) {
       if (err) { return cb(err, null); }
       if (!err && !proj) { return cb(null, null); }
       task.project = proj;
-      // user has access to the project, but is not the task owner
+      // user has access to the task, but is not the task owner
       // check the task state to make sure it is publicly accessible
-      if ((task.state === 'public') || (task.state == 'closed') || (task.isOwner === true)) {
+      if ((task.state !== 'draft') || (task.isOwner === true) || (user && user.isAdmin)) {
         return cb(null, task);
       }
       // In any other state, you have to be the owner.  Denied.
       return cb(null, null);
     });
-  });
-};
-
-var getTags = function (task, cb) {
-  tagUtil.assemble({ taskId: task.id }, function (err, tags) {
-    task.tags = tags;
-    cb(err);
   });
 };
 
@@ -108,42 +104,32 @@ var getVolunteers = function (task, cb) {
 var findTasks = function (where, cb) {
   var self = this;
   var w = where || {};
-  w.state = 'public';
   Task.find()
   .where(w)
-  .sort({'updatedAt': -1})
+  .populate('tags')
+  .sort({ publishedAt: 0, updatedAt: 0 })
   .exec(function (err, tasks) {
     if (err) { return cb({ message: 'Error looking up tasks.' }, null); }
     // function for looking up user info
-    var lookupUser = function (task, done) {
-      userUtil.getUser(task.userId, null, function (err, user) {
-        if (err) { return done(err); }
-        task.user = {
-          name: user.name,
-          agency: user.agency
-        };
-        return done();
-      });
-    };
-    // get user info
-    async.each(tasks, lookupUser, function (err) {
-      if (err) { return cb({ message: 'Error looking up user info.' }, null); }
-      // get tag info
-      async.each(tasks, self.getTags, function (err) {
-        if (err) { return cb({ message: 'Error looking up task tags.' }, null); }
-        // get likes
-        async.each(tasks, self.getLikes, function (err) {
-          if (err) { return cb({ message: 'Error looking up task likes.' }, null); }
-          return cb(err, tasks);
+    User.find({ id: _(tasks).pluck('userId').uniq().value() })
+      .populate('tags', { where: { type: 'agency' } })
+      .exec(function (err, users) {
+        if (err) return cb({ message: 'Error looking up user info.' }, null);
+        tasks.forEach(function(task) {
+          var user = _.findWhere(users, { id: task.userId }) || {};
+          task.user = {
+            name: user.name,
+            agency: user.tags[0]
+          };
         });
+        return cb(null, tasks);
       });
-    })
+
   });
-}
+};
 
 module.exports = {
   authorized: authorized,
-  getTags: getTags,
   getMetadata: getMetadata,
   getLikes: getLikes,
   getVolunteers: getVolunteers,

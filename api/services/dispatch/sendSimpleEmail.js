@@ -26,11 +26,15 @@ function send (locals, html, text, cb) {
   {
     from: locals.from,
     to: locals.to,
+    cc: _.compact([locals.cc, sails.config.notificationsCC]),
+    bcc: _.compact([locals.bcc, sails.config.notificationsBCC]),
     subject: locals.subject,
     html: html,
     text: text
-  },
-  cb);
+  }, function(err, info) {
+       if (err) sails.log.debug('Failed to send mail. If this is unexpected, please check your email configuration in config/local.js.');
+       cb(err, info);
+     });
 };
 
 module.exports = {
@@ -51,6 +55,8 @@ module.exports = {
           send(
           {
             to: fields.to,
+            cc: fields.cc,
+            bcc: fields.bcc,
             subject: fields.subject,
             from: fields.from
           },

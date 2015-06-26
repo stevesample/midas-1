@@ -1,3 +1,5 @@
+console.log('Loading... ', __filename);
+
 /**
  * Routes
  *
@@ -74,6 +76,10 @@ module.exports.routes = {
     controller: 'main',
     action: 'index'
   },
+  '/people': {
+    controller: 'main',
+    action: 'index'
+  },
   '/admin': {
     controller: 'main',
     action: 'index'
@@ -81,7 +87,9 @@ module.exports.routes = {
   '/admin/:unknownRoute': {
     controller: 'main',
     action: 'index'
-  }
+  },
+
+  '/index.html': '/'
 
   /*
   // But what if you want your home page to display
@@ -213,4 +221,3 @@ module.exports.routes = {
  * Finally, if nothing else matched, the default 404 handler is triggered.
  * See `config/404.js` to adjust your app's 404 logic.
  */
-

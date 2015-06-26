@@ -6,6 +6,7 @@ module.exports = {
   },
   // for the user.test.js suite
   'testUser': {
+    'name': 'Midas User',
     'username': 'testuser@midascrowd.com',
     'password': 'MidasTestM4$'
   },
@@ -32,6 +33,18 @@ module.exports = {
     'title': 'Project Title',
     'description': 'Project Description'
   },
+  'tasks': [
+    {
+      'title': 'task1',
+      'description': 'description1',
+      'creatorId': 1
+    },
+    {
+      'title': 'task2',
+      'description': 'description2',
+      'creatorId': 1
+    }
+  ],
   'tags': [
     {
       'type': 'skill',

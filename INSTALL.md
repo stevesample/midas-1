@@ -1,40 +1,6 @@
 Installation
 =====
 
-## Vagrant
-
-Using vagrant is a quick and easy way to get a local midas instance up and running on a virtual machine. We use [Chef](http://www.getchef.com/chef/) for automated deployment, which can also be used for deploying to cloud servers.
-
-Install:
-* [Vagrant](https://www.vagrantup.com/downloads)
-* [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
-* [Chef Development Kit](http://downloads.getchef.com/chef-dk)
-
-Clone the git repository:
-
-     git clone https://github.com/18F/midas.git
-     cd midas
-     git submodule update --init
-
-Additonal plugins:
-
-     vagrant plugin install vagrant-berkshelf
-     vagrant plugin install vagrant-omnibus
-
-Startup the virtual machine:
-
-     vagrant up
-
-If you are modifying vagrant or chef setup, then you can configure to pull from your own repo by overriding attributes in your local `chef/nodes/localhost.json` adding:
-```
-  "midas": {
-    "git_repo": "https://github.com/myrepo/midas.git",
-    "git_branch": "devel-mybranch"
-  }
-```
-
-go to [http://localhost:8080/](http://localhost:8080/) to see Midas running on your local virtual machine
-
 ## Step by Step Installation
 The following installation steps for Mac, Linux, and Windows can be used for setting up a development or production environment manually.
 
@@ -48,12 +14,21 @@ In the Terminal:
     brew install postgresql
     brew install graphicsmagick
 
-When Homebrew is done installing Postgres, follow the instructions at the end
-to start Postgres.
+When Homebrew is done installing Postgres, follow the instructions at the end to start Postgres.
 
 Next, create the `midas` database:
 
     initdb /usr/local/var/postgresql
+
+Once you're done installing you'll see two options:
+    Success. You can now start the database server using:
+
+    postgres -D /usr/local/var/postgresql
+    or
+    pg_ctl -D /usr/local/var/postgresql -l logfile start
+
+When you run either of these commands it will start running the server. It's best to choose the first choice (postgres -D /usr/local/var/postgresql) so if you work on a different tab in your terminal the server will keep running. Next in the Terminal:
+
     createdb midas
 
 Start the postgres console acting on the midas database with: `psql midas`
@@ -63,18 +38,16 @@ Start the postgres console acting on the midas database with: `psql midas`
     ALTER SCHEMA public OWNER TO midas;
     \q
 
-Then back to the command-line:
+Install node.js. As of Feb 2015 Node.js has moved to 0.12 for its stable version. But many dependencies, especially native compiled packages, don't work with 0.10 yet. So consider running Node.js 0.10.  Consider using [nvm](https://github.com/creationix/nvm) to manage Node versions. Once installed and sourced into your environment nvm can handle manage versions. 
 
-    brew install nodejs
-
-    git clone https://github.com/Innovation-Toolkit/sails-postgresql.git
-    cd sails-postgresql
-    git checkout bytea
-    npm install
-    npm link
+So back to the command line. We assume that nvm is installed and set up
+(added to `.bashrc` or equivalent).
+    
+    nvm install 0.10
+    nvm alias default 0.10
+    nvm version             # should be something like v0.10.38
 
 Then follow platform-independent steps below starting at [clone the git repository](#clone-the-git-repository).
-
 
 ### Linux (Ubuntu 12.04 LTS)
 
@@ -135,60 +108,16 @@ AND modify `pg_hba.conf`:
 
      sudo apt-get install graphicsmagick
 
-#### Clone Forked Libraries
-
-This project uses a forked version of
-[sails-postgresql](https://github.com/Innovation-Toolkit/sails-postgresql) to
-provide soft deletes and support for binary objects. Clone it and run the
-commands below to set everything up properly.
-
-     git clone https://github.com/Innovation-Toolkit/sails-postgresql.git
-     cd sails-postgresql
-     git checkout bytea
-     npm install
-     sudo npm link
-
 #### Clone the git repository.
 
      git clone https://github.com/18F/midas.git
      cd midas
-     git submodule update --init
-
-#### Install global node packages
-
-     sudo npm install -g grunt-cli
-     sudo npm install -g forever
 
 #### Install midas node packages (from the midas git folder)
-
-Important: first link in the forked sails-postgresql
-
-     npm link sails-postgresql
 
 Then run the normal npm package installer
 
      npm install
-
-#### Copy the main settings files
-
-From the root of the midas directory:
-
-     cd config
-     cp local.ex.js local.js
-
-#### Copy the backend module configuration files
-
-From the root of the midas directory:
-
-     cd config/settings
-     for file in *.ex.js; do cp "$file" "${file/ex./}"; done
-
-#### Copy the client configuration files
-
-From the root of the midas directory:
-
-     cd assets/js/backbone/config/
-     cp login.ex.json login.json
 
 #### Optional: Edit the configuration files
 
@@ -203,13 +132,29 @@ It is not necessary to edit any config files to run the demo locally.  You may o
 `login.json` specifies the login options available on the frontend, and must have a corresponding backend component or configuration enabled (see `config/settings/auth.ex.js`).
 
 #### Setup the database
+
 From the root of the midas directory, initialize the database:
 
-     make init
+     npm run migrate
+     npm run init
+     
+Please note, run `npm run init` once per database, otherwise you'll see an error. If you get an error you can skip that step.
 
-If you'd like to include a sample project, also run:
+If you'd like to include a sample project and users, also run:
 
-     make demo
+     npm run demo
+
+This also creates a handful of initial users. By default all those users are disabled, and none are admin.
+It's usually helpful to have at least one admin user (we picked "Alan Barret") so these commands are
+helpful:
+
+     psql midas
+     update midas_user set disabled='f';
+     update midas_user set "isAdmin"='t' where username='alan@test.gov';
+
+Note the quotes around "isAdmin". Postgres by default lowercases all non-keywords, which includes column names.
+This doesn't play nicely with our schema.
+
 
 Now you are ready to rock!
 
@@ -219,35 +164,30 @@ Now you are ready to rock!
 
 Run the tests (all should pass)
 
-    make test
+    npm test
 
 Run the server
 
-    sails lift
-
-If you get `command not found: sails`, install sails manually:
-
-    npm install sails -g
-
-Then try running the server:
-
-    sails lift
+    npm start
 
 
 Go to [http://localhost:1337](http://localhost:1337) to see the app
 
 Check out the [Contributor's Guide](CONTRIBUTING.md) for next steps
 
+#### Troubleshooting
+
+On Mac OSX, you may receive a stream of
+
+    Error: EMFILE, too many open files
+
+messages after running `npm start`. This is an issue with OSX and Grunt; there are directions to fix the issue [here](https://github.com/gruntjs/grunt-contrib-copy/issues/21) or [here](http://unix.stackexchange.com/questions/108174/how-to-persist-ulimit-settings-in-osx-mavericks).
 
 ## For production
 
 #### Compile production JS and CSS (from the midas git folder)
 
-     make build
-
-Alternatively, you can also run:
-
-     grunt build
+     npm run build
 
 #### Initialize the database
 
@@ -256,6 +196,10 @@ The database needs to be populated with the tag defaults for your application's 
 Edit the configuration file at `test/init/init/config.js` to match your tags in `assets/js/backbone/components/tag.js`
 
 ### Start the forever server (from the midas git folder)
+
+Install forever with from npm:
+
+     sudo npm install -g forever
 
 This will run the application server on port 1337
 
@@ -298,8 +242,9 @@ Open pgAdmin
      Create database 'midas', user account 'midas' with password 'midas', and assign user 'midas' full rights to administer DB 'midas'
 
 #### Install Node.js via Windows MSI, select all available add-ons
+**_Note that currently Midas has a dependency on nodejs version .10+ and is not tested to work with .11 or .12, do not attempt to install a version higher than node ver .10.38_**
 
-[Node.js](http://nodejs.org/download/`)
+[Node.js](http://nodejs.org/dist/v0.10.38/)
 
 #### Install GraphicsMagick
 
@@ -336,14 +281,46 @@ Navigate to Midas directory via windows cmd.exe prompt
 
 Enter the following commands
 
-	npm install sails -g
 	npm install
-	npm link sails-postgresql
-	grunt requirejs
 
-Raise sails with
+Start Midas with
 
-     sails lift
+     npm start
 
 You can now access the server at `http://localhost:1337`
 
+
+## Vagrant
+
+You can install Midas natively on Mac, Linux or Windows, or you can use a Vagrant virtual machine for development.
+
+Using vagrant is a quick and easy way to get a local midas instance up and running on a virtual machine. We use [Chef](http://www.getchef.com/chef/) for automated deployment, which can also be used for deploying to cloud servers.
+
+Install:
+* [Vagrant](https://www.vagrantup.com/downloads)
+* [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
+* [Chef Development Kit](http://downloads.getchef.com/chef-dk)
+
+Clone the git repository:
+
+     git clone https://github.com/18F/midas.git
+     cd midas
+
+Additonal plugins:
+
+     vagrant plugin install vagrant-berkshelf
+     vagrant plugin install vagrant-omnibus
+
+Startup the virtual machine:
+
+     vagrant up
+
+If you are modifying vagrant or chef setup, then you can configure to pull from your own repo by overriding attributes in your local `chef/nodes/localhost.json` adding:
+```
+  "midas": {
+    "git_repo": "https://github.com/myrepo/midas.git",
+    "git_revision": "devel-mybranch"
+  }
+```
+
+Go to [http://localhost:8080/](http://localhost:8080/) to see Midas running on your local virtual machine

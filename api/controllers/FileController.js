@@ -26,17 +26,13 @@ module.exports = {
 
   // Get the contents of a file by id or name
   get: function(req, res) {
-    if (!req.params.id) { return res.send(400, {message:'No file id specified.'}) }
+    if (!req.params.id) { return res.send(400, {message:'No file id specified.'}); }
     if (_.isFinite(req.params.id)) {
       // a File ID has been provided
       File.findOneById(req.params.id, function(err, f) {
-        if (err) { return res.send(400, {message:'Error while finding file.'}) }
-        if (!f || !f.data) { return res.send(400, {message:'Error while finding file.'}) }
-        res.set('Content-Type', f.mimeType);
-        res.set('Content-disposition', 'attachment; filename=' + f.name);
-        // Don't let browsers cache the response
-        res.set('Cache-Control', 'no-transform,public,max-age=300,s-maxage=900'); // HTTP 1.1.
-        return res.send(f.data);
+        if (err) { return res.send(400, {message:'Error while finding file.'}); }
+        if (!f || !f.fd) { return res.send(400, {message:'Error while finding file.'}); }
+        fileStore.get(f.fd, res);
       });
     } else {
       return res.send(400, {message: 'Abiguous file; please use file id.'});
@@ -46,21 +42,20 @@ module.exports = {
   create: function(req, res) {
     sails.log.debug('CREATE FILE!');
     // Create only accepts post
-    if (req.route.method != 'post') { return res.send(400, {message:'Unsupported operation.'}) }
-    // If a file wasn't included, abort.
-    if (!req.files || req.files.length === 0) { return res.send(400, {message:'Must provide file data.'})}
+    if (req.route.method != 'post') { return res.send(400, {message:'Unsupported operation.'}); }
 
     var results = [];
 
     var processFile = function (upload, done) {
       // Read the temporary file
-      fs.readFile(upload.path, function (err, fdata) {
+      fs.readFile(upload.fd, function (err, fdata) {
         if (err || !fdata) { return done({message:'Error storing file.'}); }
         // Create a file object to put in the database.
         var f = {
           userId: req.user[0].id,
-          name: upload.name,
+          name: upload.filename,
           mimeType: upload.type || upload.headers['content-type'],
+          fd: upload.fd.split('/').pop(),
           size: fdata.length,
           data: fdata
         };
@@ -79,14 +74,16 @@ module.exports = {
             .resize(newSize, newSize)
             .noProfile()
             .toBuffer(function (err, buffer) {
-              f.data = buffer;
+              delete f.data;
               f.size = buffer.length;
-              sails.log.debug('Create File:', f);
-              File.create(f, function(err, newFile) {
-                if (err || !newFile) { return done({ message:'Error storing file.', error: err }); }
-                delete newFile['data'];
-                results.push(newFile);
-                return done();
+              fileStore.store(f.fd, buffer, function(err) {
+                if (err) { return done({ message:'Error storing file.', error: err }); }
+                File.create(f, function(err, newFile) {
+                  if (err || !newFile) { return done({ message:'Error storing file.', error: err }); }
+                  delete newFile['data'];
+                  results.push(newFile);
+                  return done();
+                });
               });
             });
           });
@@ -122,39 +119,48 @@ module.exports = {
             .resize(width, height)
             .noProfile()
             .toBuffer(function (err, buffer) {
-              f.data = buffer;
+              delete f.data;
               f.size = buffer.length;
-              sails.log.debug('Create File:', f);
-              File.create(f, function(err, newFile) {
-                if (err || !newFile) { return done({ message:'Error storing file.', error: err }); }
-                delete newFile['data'];
-                results.push(newFile);
-                return done();
+              fileStore.store(f.fd, buffer, function(err) {
+                if (err) { return done({ message:'Error storing file.', error: err }); }
+                File.create(f, function(err, newFile) {
+                  if (err || !newFile) { return done({ message:'Error storing file.', error: err }); }
+                  delete newFile['data'];
+                  results.push(newFile);
+                  return done();
+                });
               });
             });
           });
         } else {
-          sails.log.debug('Create File:', f);
-          File.create(f, function(err, newFile) {
-            if (err || !newFile) { return done({ message:'Error storing file.', error: err }); }
-            delete newFile['data'];
-            results.push(newFile);
-            return done();
+          fileStore.store(f.fd, f.data, function(err) {
+            if (err) { return done({ message:'Error storing file.', error: err }); }
+            delete f.data;
+            File.create(f, function(err, newFile) {
+              if (err || !newFile) { return done({ message:'Error storing file.', error: err }); }
+              delete newFile['data'];
+              results.push(newFile);
+              return done();
+            });
           });
         }
       });
     };
 
-    async.each(req.files.files, processFile, function (err) {
-      if (err) {
-        return res.send(400, err);
-      }
-      res.set('Content-Type', 'text/html');
-      // Wrap in HTML so IE8/9 can process it; can't accept json directly
-      var wrapper = '<textarea data-type="application/json">';
-      wrapper += JSON.stringify(results);
-      wrapper += '</textarea>';
-      return res.send(wrapper);
+    req.file('files[]').upload(function(err, uploadedFiles) {
+      if (!uploadedFiles || uploadedFiles.length === 0) return res.send(400, {
+        message:'Must provide file data.'
+      });
+      async.each(uploadedFiles, processFile, function (err) {
+        if (err) return res.send(400, err);
+
+        res.set('Content-Type', 'text/html');
+        // Wrap in HTML so IE8/9 can process it; can't accept json directly
+        var wrapper = '<textarea data-type="application/json">';
+        wrapper += JSON.stringify(results);
+        wrapper += '</textarea>';
+        return res.send(wrapper);
+      });
     });
 
   },

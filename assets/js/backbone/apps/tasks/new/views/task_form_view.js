@@ -1,248 +1,178 @@
-define([
-    'jquery',
-    'bootstrap',
-    'underscore',
-    'backbone',
-    'async',
-    'utilities',
-    'markdown_editor',
-    'tasks_collection',
-    'text!task_form_template',
-    'tag_factory'
-], function ($, Bootstrap, _, Backbone, async, utilities, MarkdownEditor, TasksCollection, TaskFormTemplate, TagFactory) {
+var Bootstrap = require('bootstrap');
+var _ = require('underscore');
+var Backbone = require('backbone');
+var async = require('async');
+var utilities = require('../../../../mixins/utilities');
+var MarkdownEditor = require('../../../../components/markdown_editor');
+var TasksCollection = require('../../../../entities/tasks/tasks_collection');
+var TaskFormTemplate = require('../templates/task_form_template.html');
+var TagFactory = require('../../../../components/tag_factory');
 
-  var TaskFormView = Backbone.View.extend({
 
-    el: "#task-list-wrapper",
+var TaskFormView = Backbone.View.extend({
 
-    events: {
-      "blur .validate"        : "v",
-      "change #task-location" : "locationChange"
-    },
+  el: "#task-list-wrapper",
 
-    initialize: function (options) {
-      this.options = _.extend(options, this.defaults);
-      this.tasks = this.options.tasks;
-      this.tagFactory = new TagFactory();
-      this.data = {};
-      this.data.newTag = {};
-      this.data.newItemTags = [];
-      this.initializeSelect2Data();
-      this.initializeListeners();
-    },
+  events: {
+    "change .validate"        : "v",
+    "change #task-location" : "locationChange"
+  },
 
-    initializeSelect2Data: function () {
-      var self = this;
-      var types = ["task-skills-required", "task-time-required", "task-people", "task-length", "task-time-estimate"];
+  initialize: function (options) {
+    this.options = _.extend(options, this.defaults);
+    this.tasks = this.options.tasks;
+    this.tagFactory = new TagFactory();
+    this.data = {};
+    this.data.newTag = {};
+    this.data.newItemTags = [];
+    this.data.existingTags = [];
+    this.initializeSelect2Data();
+    this.initializeListeners();
+  },
 
-      this.tagSources = {};
+  initializeSelect2Data: function () {
+    var self = this;
+    var types = ["task-skills-required", "task-time-required", "task-people", "task-length", "task-time-estimate"];
 
-      var requestAllTagsByType = function (type) {
-        $.ajax({
-          url: '/api/ac/tag?type=' + type + '&list',
-          type: 'GET',
-          async: false,
-          success: function (data) {
-            self.tagSources[type] = data;
-          }
-        });
-      }
+    this.tagSources = {};
 
-      async.each(types, requestAllTagsByType, function (err) {
-        self.render();
-      });
-    },
-
-    initializeListeners: function() {
-      var self = this;
-      
-      _.extend(this, Backbone.Events);
-
-      self.on('newTagSaveDone',function (){
-
-        tags         = [];
-        var tempTags = [];
-
-        //get newly created tags from big three types
-        _.each(self.data.newItemTags, function(newItemTag){
-          tags.push(newItemTag);
-        });
-
-        tempTags.push.apply(tempTags,self.$("#topics").select2('data'));
-        tempTags.push.apply(tempTags,self.$("#skills").select2('data'));
-        if (self.$("#task-location").select2('data').id == 'true') {
-          tempTags.push.apply(tempTags,self.$("#location").select2('data'));
+    var requestAllTagsByType = function (type) {
+      $.ajax({
+        url: '/api/ac/tag?type=' + type + '&list',
+        type: 'GET',
+        async: false,
+        success: function (data) {
+          self.tagSources[type] = data;
         }
-        
-        //see if there are any previously created big three tags and add them to the tag array
-        _.each(tempTags,function(tempTag){
-            if ( tempTag.id !== tempTag.name ){
-            tags.push(tempTag);
-          }
-        });
-
-        //existing tags not part of big three
-        tags.push(self.$("#skills-required").select2('data'));
-        tags.push(self.$("#people").select2('data'));
-        tags.push(self.$("#time-required").select2('data'));
-        tags.push(self.$("#time-estimate").select2('data'));
-        tags.push(self.$("#length").select2('data'));
-        
-        async.forEach(
-          tags,
-          function(tag, callback){
-            //diffAdd,self.model.attributes.id,"taskId",callback
-            return self.tagFactory.addTag(tag,self.tempTaskId,"taskId",callback);
-          },
-          function(err){
-            self.model.trigger("task:modal:hide");
-            self.model.trigger("task:tags:save:success", err);
-          }
-        );
       });
+    };
 
+    async.each(types, requestAllTagsByType, function (err) {
+      self.render();
+    });
+  },
 
-      this.listenTo(this.tasks,"task:save:success", function (taskId){
-        //the only concern here is to add newly created tags which is only available in the three items below
-        //
+  initializeListeners: function() {
+    var self = this;
+    _.extend(this, Backbone.Events);
+  },
 
-        self.tempTaskId = taskId;
+  getTagsFromPage: function () {
 
-        var newTags = [];
+    // Gather tags for submission after the task is created
+    tags = {
+      topic: this.$("#task_tag_topics").select2('data'),
+      skill: this.$("#task_tagskills").select2('data'),
+      location: this.$("#task_tag_location").select2('data'),
+      'task-skills-required': [ this.$("#skills-required").select2('data') ],
+      'task-people': [ this.$("#people").select2('data') ],
+      'task-time-required': [ this.$("#time-required").select2('data') ],
+      'task-time-estimate': [ this.$("#time-estimate").select2('data') ],
+      'task-length': [ this.$("#length").select2('data') ]
+    };
 
-        newTags = newTags.concat(self.$("#topics").select2('data'),self.$("#skills").select2('data'),self.$("#location").select2('data'));
-        
-        async.forEach(
-          newTags, 
-          function(newTag, callback) { 
-            return self.tagFactory.addTagEntities(newTag,self,callback);
-          }, 
-          function(err) {
-            if (err) return next(err);
-            self.trigger("newTagSaveDone");
-          }
-        );
+    return tags;
+  },
 
-      });
-    },
+  render: function () {
+    var template = _.template(TaskFormTemplate)({ tags: this.tagSources });
+    this.$el.html(template);
+    this.initializeSelect2();
+    this.initializeTextArea();
 
-    getTagsFromPage: function () {
+    // Important: Hide all non-currently opened sections of wizard.
+    this.$("section:not(.current)").hide();
+    this.$el.i18n();
 
-      // Gather tags for submission after the task is created
-      tags = {
-        topic: this.$("#topics").select2('data'),
-        skill: this.$("#skills").select2('data'),
-        location: this.$("#location").select2('data'),
-        'task-skills-required': [ this.$("#skills-required").select2('data') ],
-        'task-people': [ this.$("#people").select2('data') ],
-        'task-time-required': [ this.$("#time-required").select2('data') ],
-        'task-time-estimate': [ this.$("#time-estimate").select2('data') ],
-        'task-length': [ this.$("#length").select2('data') ]
-      };
+    // Return this for chaining.
+    return this;
+  },
 
-      return tags;
-    },
+  v: function (e) {
+    return validate(e);
+  },
 
-    render: function () {
-      var template = _.template(TaskFormTemplate, { tags: this.tagSources })
-      this.$el.html(template);
-      this.initializeSelect2();
-      this.initializeTextArea();
+  childNext: function (e, current) {
+    // find all the validation elements
+    var children = current.find('.validate');
+    var abort = false;
+    _.each(children, function (child) {
+      var iAbort = validate({ currentTarget: child });
+      abort = abort || iAbort;
+    });
+    return abort;
+  },
 
-      // Important: Hide all non-currently opened sections of wizard.
-      this.$("section:not(.current)").hide();
+  initializeSelect2: function () {
+    var self = this;
 
-      // Return this for chaining.
-      return this;
-    },
+    self.tagFactory.createTagDropDown({type:"skill",selector:"#task_tag_skills",width: "100%",tokenSeparators: [","]});
+    self.tagFactory.createTagDropDown({type:"topic",selector:"#task_tag_topics",width: "100%",tokenSeparators: [","]});
+    self.tagFactory.createTagDropDown({type:"location",selector:"#task_tag_location",width: "100%",tokenSeparators: [","]});
 
-    v: function (e) {
-      return validate(e);
-    },
+    self.$(".el-specific-location").hide();
 
-    childNext: function (e, current) {
-      // find all the validation elements
-      var children = current.find('.validate');
-      var abort = false;
-      _.each(children, function (child) {
-        var iAbort = validate({ currentTarget: child });
-        abort = abort || iAbort;
-      });
-      return abort;
-    },
+    // ------------------------------ //
+    // PRE-DEFINED SELECT MENUS BELOW //
+    // ------------------------------ //
+    self.$("#skills-required").select2({
+      placeholder: "Required/Not Required",
+      width: 'resolve'
+    });
 
-    initializeSelect2: function () {
-      var self = this;
+    self.$("#time-required").select2({
+      placeholder: 'Time Commitment',
+      width: 'resolve'
+    });
 
-      self.tagFactory.createTagDropDown({type:"skill",selector:"#skills"});
-      self.tagFactory.createTagDropDown({type:"topic",selector:"#topics"});
-      self.tagFactory.createTagDropDown({type:"location",selector:"#location"});
-      
-      self.$(".el-specific-location").hide();
+    self.$("#people").select2({
+      placeholder: 'Personnel Needed',
+      width: 'resolve'
+    });
 
-      // ------------------------------ //
-      // PRE-DEFINED SELECT MENUS BELOW //
-      // ------------------------------ //
-      self.$("#skills-required").select2({
-        placeholder: "Required/Not Required",
-        width: 'resolve'
-      });
+    self.$("#length").select2({
+      placeholder: 'Deadline',
+      width: 'resolve'
+    });
 
-      self.$("#time-required").select2({
-        placeholder: 'Time Commitment',
-        width: 'resolve'
-      });
+    self.$("#time-estimate").select2({
+      placeholder: 'Estimated Time Required',
+      width: 'resolve'
+    });
 
-      self.$("#people").select2({
-        placeholder: 'Personnel Needed',
-        width: 'resolve'
-      });
+    self.$("#task-location").select2({
+      placeholder: 'Work Location',
+      width: 'resolve'
+    });
 
-      self.$("#length").select2({
-        placeholder: 'Deadline',
-        width: 'resolve'
-      });
+  },
 
-      self.$("#time-estimate").select2({
-        placeholder: 'Estimated Time Required',
-        width: 'resolve'
-      });
+  initializeTextArea: function () {
+    if (this.md) { this.md.cleanup(); }
+    this.md = new MarkdownEditor({
+      data: '',
+      el: ".markdown-edit",
+      id: 'task-description',
+      placeholder: 'Description of ' + i18n.t('task') + ' including goals, expected outcomes and deliverables.',
+      title: i18n.t('Task') + ' Description',
+      rows: 6,
+      validate: ['empty']
+    }).render();
+  },
 
-      self.$("#task-location").select2({
-        placeholder: 'Work Location',
-        width: 'resolve'
-      });
-
-    },
-
-    initializeTextArea: function () {
-      if (this.md) { this.md.cleanup(); }
-      this.md = new MarkdownEditor({
-        data: '',
-        el: ".markdown-edit",
-        id: 'task-description',
-        placeholder: 'Description of opportunity including goals, expected outcomes and deliverables.',
-        title: 'Opportunity Description',
-        rows: 6,
-        validate: ['empty']
-      }).render();
-    },
-
-    locationChange: function (e) {
-      if (_.isEqual(e.currentTarget.value, "true")) {
-        this.$(".el-specific-location").show();
-      } else {
-        this.$(".el-specific-location").hide();
-      }
-    },
-
-    cleanup: function () {
-      if (this.md) { this.md.cleanup(); }
-      removeView(this);
+  locationChange: function (e) {
+    if (_.isEqual(e.currentTarget.value, "true")) {
+      this.$(".el-specific-location").show();
+    } else {
+      this.$(".el-specific-location").hide();
     }
+  },
 
-  });
-
-  return TaskFormView;
+  cleanup: function () {
+    if (this.md) { this.md.cleanup(); }
+    removeView(this);
+  }
 
 });
+
+module.exports = TaskFormView;

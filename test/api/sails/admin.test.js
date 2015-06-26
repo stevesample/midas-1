@@ -125,5 +125,46 @@ describe('admin:', function () {
       });
     });
 
+    it('change user email', function (done) {
+      // create the test user
+      utils.login(request, conf.testPasswordResetUser, function (err) {
+        if (err) { return done(err); }
+        var obj = conf.testPasswordResetUser.obj;
+        var emailBefore = obj.emails[0],
+            emailAfter = emailBefore.email.replace('+test@', '@');
+        // log back in as an administrator
+        utils.login(request, conf.adminUser, function (err) {
+          if (err) { return done(err); }
+          var obj = conf.adminUser.obj;
+          var adminEmail = obj.emails[0];
+          request.put({
+            url: conf.url + '/useremail/' + emailBefore.id,
+            form: { email: emailAfter }
+          }, function(err, response, body) {
+            if (err) { return done(err); }
+            // Logged in users should get a 200 with the user object
+            assert.equal(response.statusCode, 200);
+            var obj = JSON.parse(body);
+            assert.equal(obj.email, emailAfter);
+            assert.notEqual(obj.email, adminEmail);
+            done();
+          });
+        });
+      });
+    });
+
+    it('export', function (done) {
+      request.get({
+        url: conf.url + '/user/export'
+      }, function (err, response, body) {
+        assert.equal(response.statusCode, 200);
+        var testBody = '"user_id","name","username","title","agency","location","bio","admin","disabled"\n' +
+            '1,"","' + conf.defaultUser.username + '","","","","",false,false\n' +
+            '2,"","' + conf.adminUser.username + '","","","","",true,false\n' +
+            '3,"","' + conf.testPasswordResetUser.username + '","","","","",false,false\n'
+        assert.equal(body, testBody);
+        done(err);
+      });
+    });
   });
 });

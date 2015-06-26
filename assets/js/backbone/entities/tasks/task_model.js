@@ -1,69 +1,83 @@
-define([
-    'underscore',
-    'backbone'
-], function (_, Backbone) {
-  'use strict';
+var _ = require('underscore');
+var Backbone = require('backbone');
 
-  var TaskModel = Backbone.Model.extend({
+'use strict';
 
-    defaults: {
-      name        : null,
-      description : null
-    },
+var TaskModel = Backbone.Model.extend({
 
-    urlRoot: '/api/task',
+  defaults: {
+    name        : null,
+    description : null
+  },
 
-    initialize: function () {
-      this.listenTo(this, "task:save", function (data) {
-        this.save();
-      });
+  urlRoot: '/api/task',
 
-      this.listenTo(this, "task:model:fetch", function (data) {
-        this.remoteGet(data);
-      });
+  initialize: function () {
+    this.listenTo(this, "task:save", function (data) {
+      this.save(data);
+    });
 
-      this.listenTo(this, "task:update", function (data) {
-        this.update(data);
-      });
+    this.listenTo(this, "task:model:fetch", function (data) {
+      this.remoteGet(data);
+    });
 
-      this.listenTo(this, "task:update:state", function (state) {
-        this.updateState(state);
-      });
-    },
+    this.listenTo(this, "task:update", function (data) {
+      this.update(data);
+    });
 
-    update: function (data) {
-      var self = this;
+    this.listenTo(this, "task:update:state", function (state) {
+      this.updateState(state);
+    });
 
-      this.save(data, {
-        success: function (data) {
-          self.trigger("task:update:success", data);
-        }
-      });
-    },
+    this.listenTo(this, "task:update:orphan", function (data) {
+      this.orphan(data);
+    });
+  },
 
-    updateState: function (state) {
-      var self = this;
+  update: function (data) {
+    var self = this;
+    this.save(data, {
+      success: function (data) {
+        self.trigger("task:update:success", data);
+      }
+    });
+  },
 
-      this.save({
-        state: state
-      }, {
-        success: function(data) {
-          self.trigger("task:update:state:success", data);
-        }
-      });
-    },
+  updateState: function (state) {
+    var self = this;
 
-    remoteGet: function (id) {
-      var self = this;
-      this.set({ id: id });
-      this.fetch({
-        success: function (data) {
-          self.trigger("task:model:fetch:success", data);
-        }
-      });
-    },
+    this.save({
+      state: state
+    }, {
+      success: function(data) {
+        self.trigger("task:update:state:success", data);
+      }
+    });
+  },
 
-  });
+  orphan: function(data) {
+    var self = this;
 
-    return TaskModel;
+    this.save({
+      projectId: null
+    }, {
+      success: function(data) {
+        self.trigger("task:update:orphan:success", data);
+      }
+    });
+
+  },
+
+  remoteGet: function (id) {
+    var self = this;
+    this.set({ id: id });
+    this.fetch({
+      success: function (data) {
+        self.trigger("task:model:fetch:success", data);
+      }
+    });
+  },
+
 });
+
+  module.exports = TaskModel;

@@ -1,6 +1,7 @@
 var conf = require('./config');
 var fs = require('fs');
 var request = require('request');
+var async = require('async');
 var _ = require('underscore');
 
 module.exports = {
@@ -8,6 +9,12 @@ module.exports = {
     var j = request.jar();
     var r = request.defaults({ jar: j, followRedirect: false });
     return r;
+  },
+
+  logout: function (request, cb) {
+    request.get({url: conf.url + '/auth/logout'}, function (err) {
+      return cb(err);
+    });
   },
 
   login: function (request, user, cb) {
@@ -49,11 +56,11 @@ module.exports = {
     });
   },
 
-  createProject: function(request, public, cb) {
-    if (!public) {
+  createProject: function(request, open, cb) {
+    if (!open) {
       conf.project.state = 'draft';
     } else {
-      conf.project.state = 'public';
+      conf.project.state = 'open';
     }
     request.post({ url: conf.url + '/project',
                    body: JSON.stringify(conf.project)
@@ -62,6 +69,22 @@ module.exports = {
       var b = JSON.parse(body);
       cb(null, b);
     });
+  },
+
+  createTasks: function (request, outerCallback) {
+    async.each(conf.tasks,
+        function (task, innerCallback) {
+          request.post({
+            url: conf.url + '/task/create',
+            body: JSON.stringify(task)
+          }, function (err) {
+            innerCallback(err);
+          })
+        },
+        function (err) {
+          outerCallback(err);
+        }
+    );
   }
 
 };

@@ -7,6 +7,8 @@ var fs = require('fs');
 var sails;
 var err;
 
+process.env.NODE_ENV = (process.argv.indexOf('--development') >= 0) ? 'development' : 'test';
+
 before(function(done) {
   console.log('lifting sails: env='+process.env.NODE_ENV );
 
@@ -16,7 +18,10 @@ before(function(done) {
       level: 'error'
     },
     hooks: {
-      grunt: false
+      grunt: false,
+      sockets: false,
+      pubsub: false,
+      csrf: false
     }
   }
 
@@ -36,7 +41,15 @@ before(function(done) {
     // export properties for upcoming tests with supertest.js
     sails.localAppURL = localAppURL = ( sails.usingSSL ? 'https' : 'http' ) + '://' + sails.config.host + ':' + sails.config.port + '';
     // save reference for teardown function
-    done(err);
+
+    //Add temp userauth
+    sails.models.userauth.create({
+      userId: 4,
+      provider: 'test',
+      accessToken: 'testCode'
+    }, function(err, model) {
+      done(err);
+    })
   });
 
 });

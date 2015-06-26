@@ -26,11 +26,11 @@ module.exports = {
       }
       // store userEmail object as metadata
       content.fields.metadata.userEmail = userEmail;
-      Task.findOneById(fields.callerId).done(function (err, task) {
+      Task.findOneById(fields.callerId).exec(function (err, task) {
         if (err) { sails.log.debug(err); cb(null, content); return false;}
         // store the task in the metadata
         content.fields.metadata.task = task;
-        
+
         content.fields.volunteerId = content.fields.metadata.modelTrigger.volunteerId || null;
         // for a volunteer this the volunteer id otherwise it will never not match
         content.fields.initiatorId = content.fields.metadata.modelTrigger.volunteerId || null;
@@ -49,15 +49,12 @@ module.exports = {
           content.fields.templateLocals.profileLink = content.fields.metadata.globals.urlPrefix  + '/profile/' + volunteer.id;
           content.fields.templateLocals.profileTitle = (volunteer.title ? volunteer.title : "");
           content.fields.templateLocals.profileName = (volunteer.name ? volunteer.name : "Someone");
+          content.fields.templateLocals.profileEmail = (volunteer.username ? volunteer.username : "Unknown Email");
           // set info on volunteer's location and agency
           volunteer.location = volunteer.location || {};
-          volunteer.location.tag = volunteer.location.tag || {};
-          volunteer.location.tag.name = volunteer.location.tag.name || '';
           volunteer.agency = volunteer.agency || {};
-          volunteer.agency.tag = volunteer.agency.tag || {};
-          volunteer.agency.tag.name = volunteer.agency.tag.name || '';
-          content.fields.templateLocals.profileLocation = volunteer.location.tag.name;
-          content.fields.templateLocals.profileAgency = volunteer.agency.tag.name;
+          content.fields.templateLocals.profileLocation = volunteer.location.name;
+          content.fields.templateLocals.profileAgency = volunteer.agency.name;
           cb(null, content);
         });
       });

@@ -27,7 +27,7 @@ describe('tag:', function() {
   describe('logged in:', function () {
 
     it('add', function (done) {
-      request.post({ url: conf.url + '/tag/add',
+      request.post({ url: conf.url + '/tagentity',
                      body: JSON.stringify(conf.tags[0])
                    }, function (err, response, body) {
         if (err) { return done(err); }
@@ -48,15 +48,15 @@ describe('tag:', function() {
         projectId: publicProject.id,
         tagId: tags[0].id
       };
-      request.post({ url: conf.url + '/tag',
-                     body: JSON.stringify(tag)
+      request.put({ url: conf.url + '/project/' + tag.projectId,
+                     body: JSON.stringify({ tags: [tag.tagId] })
                    }, function(err, response, body) {
         if (err) { return done(err); }
         assert.equal(response.statusCode, 200);
         var b = JSON.parse(body);
         // check that the values passed in are the same as those passed back
-        assert.equal(tag.projectId, b.projectId);
-        assert.equal(tag.tagId, b.tagId);
+        assert.equal(tag.projectId, b.id);
+        assert.equal(tag.tagId, b.tags[0].id);
         // make sure the automatically populated fields get set
         assert(b.id);
         done();
@@ -64,71 +64,81 @@ describe('tag:', function() {
     });
 
     it('findAllByProjectId', function (done) {
-      request.get({ url: conf.url + '/tag/findAllByProjectId/' + publicProject.id },
+      request.get({ url: conf.url + '/project/' + publicProject.id },
         function (err, response, body) {
           if (err) { return done(err); }
           assert.equal(response.statusCode, 200);
           var b = JSON.parse(body);
-          assert.equal(b.length, 1);
-          b = b[0];
-          assert.equal(b.tag.type, tags[0].type);
-          assert.equal(b.tag.name, tags[0].name);
-          assert.equal(b.tagId, tags[0].id);
-          assert.equal(b.projectId, publicProject.id);
-          assert(b.id);
+          assert.equal(b.tags.length, 1);
+          assert.equal(b.tags[0].type, tags[0].type);
+          assert.equal(b.tags[0].name, tags[0].name);
+          assert.equal(b.tags[0].id, tags[0].id);
+          assert.equal(b.id, publicProject.id);
           done();
       });
     });
 
-    it('find denied', function (done) {
-      request.get({ url: conf.url + '/tag' }, function (err, response, body) {
-        if (err) { return done(err); }
-        assert.equal(response.statusCode, 403);
-        done();
-      });
-    });
-
     it('destroy', function (done) {
-      // Create a new tag
-      request.post({ url: conf.url + '/tag/add',
-                     body: JSON.stringify(conf.tags[1])
-                   }, function (err, response, body) {
+      // Add new tag
+      request.put({
+        url: conf.url + '/project/' + draftProject.id,
+        body: JSON.stringify({ tags: [conf.tags[1]] })
+      }, function(err, response, body) {
+
         if (err) { return done(err); }
         assert.equal(response.statusCode, 200);
         var b = JSON.parse(body);
         // check that the values passed in are the same as those passed back
-        assert.equal(conf.tags[1].name, b.name);
-        assert.equal(conf.tags[1].type, b.type);
+        assert.equal(conf.tags[1].name, b.tags[0].name);
+        assert.equal(conf.tags[1].type, b.tags[0].type);
         // make sure the automatically populated fields get set
-        assert(b.id);
-        tags.push(b);
-        var tag = {
-          projectId: draftProject.id,
-          tagId: b.id
-        };
-        // Create a mapping in the project between the tag entity
-        // and the project
-        request.post({ url: conf.url + '/tag',
-                       body: JSON.stringify(tag)
-                     }, function(err, response, body) {
+        assert(b.tags[0].id);
+        assert.equal(draftProject.id, b.id);
+        tags.push(b.tags[0]);
+
+        // Try to destroy the tag
+        request.put({
+          url: conf.url + '/project/' + draftProject.id,
+          body: JSON.stringify({ tags: [] })
+        }, function(err, response, body) {
           assert.equal(response.statusCode, 200);
           var b = JSON.parse(body);
-          // check that the values passed in are the same as those passed back
-          assert.equal(tag.projectId, b.projectId);
-          assert.equal(tag.tagId, b.tagId);
-          // make sure the automatically populated fields get set
-          assert(b.id);
-          var tagMapping = b;
-          // Try to destroy the tag
-          request.del({ url: conf.url + '/tag/' + tagMapping.id}, function (err, response, body) {
-            assert.equal(response.statusCode, 200);
-            var b = JSON.parse(body);
-            assert.equal(b.id, tagMapping.id);
-            done();
-          });
+          assert.equal(b.id, draftProject.id);
+          assert.equal(b.tags.length, 0);
+          done();
         });
       });
     });
+
+    it('location tag', function (done) {
+      request.get({
+        url: conf.url + '/location/suggest?q=Camden,%20NJ'
+      }, function(err, response, body) {
+        assert.equal(response.statusCode, 200);
+        var b = JSON.parse(body);
+        assert.isAbove(body.length, 0);
+        var tag = {
+              name: body[0].name,
+              type: 'location',
+              data: _.omit(body[0], 'name')
+            };
+
+        request.post({ url: conf.url + '/tagentity',
+                       body: JSON.stringify(tag)
+                     }, function (err, response, body) {
+          if (err) { return done(err); }
+          assert.equal(response.statusCode, 200);
+          var b = JSON.parse(body);
+          // check that the values passed in are the same as those passed back
+          assert.equal(tag.name, b.name);
+          assert.equal(tag.type, b.type);
+          assert.deepEqual(tag.data, b.data);
+          done();
+        });
+
+      });
+    });
+
 
   });
 
@@ -139,7 +149,7 @@ describe('tag:', function() {
     });
 
     it('add denied', function (done) {
-      request.post({ url: conf.url + '/tag/add',
+      request.post({ url: conf.url + '/tagentity',
                      body: JSON.stringify(conf.tags[0])
                    }, function (err, response, body) {
         if (err) { return done(err); }
@@ -148,51 +158,38 @@ describe('tag:', function() {
       });
     });
 
-    it('create denied', function (done) {
-      var tag = {
-        projectId: publicProject.id,
-        tagId: tags[0].id
-      };
-      request.post({ url: conf.url + '/tag',
-                     body: JSON.stringify(tag)
-                   }, function(err, response, body) {
-        if (err) { return done(err); }
-        assert.equal(response.statusCode, 403);
-        done();
-      });
-    });
-
-    it('find denied', function (done) {
-      request.get({ url: conf.url + '/tag' }, function (err, response, body) {
-        if (err) { return done(err); }
-        assert.equal(response.statusCode, 403);
-        done();
-      });
-    });
-
     it('findAllByProjectId', function (done) {
-      request.get({ url: conf.url + '/tag/findAllByProjectId/' + publicProject.id },
+      request.get({ url: conf.url + '/project/' + publicProject.id },
         function (err, response, body) {
           if (err) { return done(err); }
           assert.equal(response.statusCode, 200);
           var b = JSON.parse(body);
-          assert.equal(b.length, 1);
-          b = b[0];
-          assert.equal(b.tag.type, tags[0].type);
-          assert.equal(b.tag.name, tags[0].name);
-          assert.equal(b.tagId, tags[0].id);
-          assert.equal(b.projectId, publicProject.id);
-          assert(b.id);
+          assert.equal(b.tags.length, 1);
+          assert.equal(b.tags[0].type, tags[0].type);
+          assert.equal(b.tags[0].name, tags[0].name);
+          assert.equal(b.tags[0].id, tags[0].id);
+          assert.equal(b.id, publicProject.id);
           done();
       });
     });
 
     it('findAllByProjectId denied', function (done) {
-      request.get({ url: conf.url + '/tag/findAllByProjectId/' + draftProject.id },
+      request.get({ url: conf.url + '/project/' + draftProject.id },
         function (err, response, body) {
           if (err) { return done(err); }
           assert.equal(response.statusCode, 403);
           done();
+      });
+    });
+
+    it('autocomplete', function(done) {
+      request.get({ url: conf.url + '/ac/tag?q=T' }, function(err, response, body) {
+        if (err) { return done(err); }
+        assert.equal(response.statusCode, 200);
+        var b = JSON.parse(body);
+        assert.equal(b[0].name, tags[0].name);
+        assert.equal(b[0].type, tags[0].type);
+        done();
       });
     });
 

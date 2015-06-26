@@ -2,7 +2,7 @@
   <h2>
     Available Opportunities
     <% if (user) { %>
-    <a href="#addTask" class="btn btn-c0 btn-sm file-add add-task" data-toggle="modal">Add Opportunity</a>
+    <a href="#addTask" class="btn btn-c0 btn-sm file-add add-task" data-toggle="modal" data-backdrop="static">Add Opportunity</a>
     <% } %>
   </h2>
 </div>
@@ -16,17 +16,21 @@
   </div>
   <% } %>
   <% _.each(tasks, function(task) { %>
-  <div class="task border-left" data-projectid="<%= task.projectId %>" data-id="<%= task.id %>">
+  <div class="task border-left" data-projectid="<%- task.projectId %>" data-id="<%- task.id %>">
+    <div class="pull-right">
+      <strong><%- task.state %></strong>
+    </div>
     <div class="task-title">
-      <a href="/tasks/<%- task.id %>" class="show-task" data-projectid="<%= task.projectId %>" data-id="<%= task.id %>"><%- task.title %></a>
+      <a href="/tasks/<%- task.id %>" class="show-task" data-projectid="<%- task.projectId %>" data-id="<%- task.id %>"><%- task.title %></a>
     </div>
     <div class="task-description">
+      <% /* Escaped with marked() */ %>
       <%= task.description %>
     </div>
     <div class="task-tags-row">
       <ul class="tags task-tags">
         <% _.each(task.tags, function (tag) { %>
-          <li><%= tag.tag.name %></li>
+          <li><%- tag.name %></li>
         <% }); %>
       </ul>
     </div>

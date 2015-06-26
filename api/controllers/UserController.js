@@ -9,63 +9,11 @@ var _ = require('underscore');
 var bcrypt = require('bcrypt');
 var projUtils = require('../services/utils/project');
 var taskUtils = require('../services/utils/task');
+var exportUtil = require('../services/utils/export');
 var tagUtils = require('../services/utils/tag');
 var userUtils = require('../services/utils/user');
 var validator = require('validator');
-
-var getUserForUpdate = function (userId, reqUser, cb) {
-  if (userId == reqUser.id) {
-    return cb(null, reqUser);
-  }
-  if (reqUser.isAdmin !== true) {
-    return cb({ message: "Not Authorized."}, null);
-  }
-  User.findOneById(userId, function (err, user) {
-    cb(err, user);
-  });
-};
-
-var update = function (req, res) {
-  var reqUser = req.user[0];
-  var userId = req.route.params.id || reqUser.id;
-  getUserForUpdate(userId, reqUser, function (err, user) {
-    if (err) { return res.send(403, err); }
-    var params = _.extend(req.body || {}, req.params);
-    if (!_.isUndefined(params.name)) { user.name = params.name; }
-    if (!_.isUndefined(params.username)) { user.username = params.username; }
-    if (!_.isUndefined(params.photoId)) { user.photoId = params.photoId; }
-    if (!_.isUndefined(params.photoUrl)) { user.photoUrl = params.photoUrl; }
-    if (!_.isUndefined(params.title)) { user.title = params.title; }
-    if (!_.isUndefined(params.bio)) { user.bio = params.bio; }
-    // The main user object is being updated
-    if (user) {
-      sails.log.debug('User Update:', user);
-      user.save(function (err) {
-        if (err) { return res.send(400, {message:'Error while saving user.'}) }
-        // Check if a userauth was removed
-        if (params.auths) {
-          var checkAuth = function(auth, done) {
-            if (_.contains(params.auths, auth.provider)) {
-              return done();
-            }
-            auth.destroy(done);
-          };
-
-          UserAuth.findByUserId(req.user[0].id, function (err, auths) {
-            if (err) { return res.send(400, {message:'Error finding authorizations.'}); }
-            async.each(auths, checkAuth, function(err) {
-              if (err) { return res.send(400, {message:'Error finding authorizations.'}); }
-              user.auths = params.auths;
-              return res.send(user);
-            });
-          });
-        } else {
-          res.send(user);
-        }
-      });
-    }
-  });
-};
+var actionUtil = require('sails/lib/hooks/blueprints/actionUtil');
 
 module.exports = {
 
@@ -100,8 +48,9 @@ module.exports = {
     if (req.user) {
       reqId = req.user[0].id;
     }
-    sails.services.utils.user['getUser'](req.route.params.id, reqId, function (err, user) {
+    sails.services.utils.user.getUser(req.route.params.id, reqId, function (err, user) {
       // prune out any info you don't want to be public here.
+      if (reqId !== req.route.params.id) user.username = null;
       if (err) { return res.send(400, { message: err }); }
       sails.log.debug('User Get:', user);
       res.send(user);
@@ -118,16 +67,78 @@ module.exports = {
     if (req.route.params.id) {
       userId = req.route.params.id;
     }
-    sails.services.utils.user['getUser'](userId, reqId, function (err, user) {
+    sails.services.utils.user.getUser(userId, reqId, req.user, function (err, user) {
       // this will only be shown to logged in users.
+      if (userId !== reqId) user.username = null;
       if (err) { return res.send(400, err); }
       sails.log.debug('User Get:', user);
       res.send(user);
     });
   },
 
-  update: function (req, res) {
-    return update(req, res);
+  findOne: function(req, res) {
+    module.exports.find(req, res);
+  },
+
+  all: function (req, res) {
+    User.find().populate('tags').exec(function (err, users) {
+      users = _.reject(users, function (u) { return u.disabled; });
+      if (err) {
+        return res.serverError(err);
+      }
+      _.each(users, function (user) {
+        delete user.auths;
+        delete user.passwordAttempts;
+        user.location = _.findWhere(user.tags, {type: 'location'});
+        user.agency = _.findWhere(user.tags, {type: 'agency'});
+      });
+      res.send(users);
+    });
+  },
+
+  // Use default Blueprint template with filtered data to return full profiles
+  profile: function(req, res) {
+    if (!req.user) return res.forbidden();
+
+    // Lookup for records that match the specified criteria
+    var Model = actionUtil.parseModel(req),
+        where = _.omit(actionUtil.parseCriteria(req), 'access_token'),
+        query = Model.find()
+          .where(where)
+          .limit(actionUtil.parseLimit(req))
+          .skip(actionUtil.parseSkip(req))
+          .sort(actionUtil.parseSort(req));
+
+    query.exec(function found(err, matchingRecords) {
+      if (err) return res.serverError(err);
+
+      matchingRecords = _.reject(matchingRecords, 'disabled');
+      var ids  = matchingRecords.map(function(m) { return m.id; }),
+          reqId = req.user[0].id;
+
+      async.map(ids, function(userId, cb) {
+        sails.services.utils.user.getUser(userId, reqId, req.user, function (err, user) {
+          if (err) return cb(err);
+          if (userId !== reqId && !_.contains(where.username, user.username)) {
+            delete user.username;
+          }
+          delete user.emails;
+          delete user.auths;
+          cb(null, user);
+        });
+      }, function(err, results) {
+        if (err) { return res.send(400, err); }
+        res.ok(results);
+      });
+    });
+  },
+
+  emailCount: function(req, res) {
+    var testEmail = req.param('email');
+    User.count({ username: testEmail }).exec(function(err, count) {
+      if (err) { return res.send(400, err); }
+      res.send('' + count);
+    });
   },
 
   activities: function (req, res) {
@@ -154,7 +165,7 @@ module.exports = {
             projUtils.authorized(projId, userId, function (err, proj) {
               if (proj) {
                 // delete unnecessary data from projects
-                delete proj['deletedAt'];
+                delete proj.deletedAt;
                 projects.push(proj);
               }
               done(err);
@@ -195,7 +206,7 @@ module.exports = {
                   callback(err);
                 });
               });
-            })
+            });
           });
         });
       },
@@ -299,7 +310,9 @@ module.exports = {
    */
   resetPassword: function (req, res) {
     // POST is the only supported method
-    if (req.route.method != 'post') { return res.send(400, {message:'Unsupported operation.'}) }
+    if (req.route.method != 'post') {
+      return res.send(400, {message:'Unsupported operation.'});
+    }
     var userId = req.user[0].id;
     // Allow administrators to set other users' passwords
     if ((req.user[0].isAdmin === true) && (req.param('id'))) {
@@ -336,7 +349,7 @@ module.exports = {
           password: hash
         };
         // Store the user's password with the bcrypt hash
-        UserPassword.create(pwObj).done(function (err, pwObj) {
+        UserPassword.create(pwObj).exec(function (err, pwObj) {
           if (err) { return res.send(400, { message: 'Unable to store password.'}); }
           return res.send(true);
         });
@@ -344,5 +357,34 @@ module.exports = {
     });
 
   },
+
+  export: function (req, resp) {
+    User.find().populate('tags').exec(function (err, users) {
+
+      users.forEach(function(user) {
+        user.tags.forEach(function(tag) {
+          user[tag.type] = tag.name;
+        });
+      });
+
+      if (err) {
+        sails.log.error("user query error. " + err);
+        resp.send(400, {message: 'An error occurred while looking up users.', error: err});
+        return;
+      }
+      sails.log.debug('user export: found %s', users.length);
+
+      exportUtil.renderCSV(User, users, function (err, rendered) {
+        if (err) {
+          sails.log.error("user export render error. " + err);
+          resp.send(400, {message: 'An error occurred while rendering user list.', error: err});
+          return;
+        }
+        resp.set('Content-Type', 'text/csv');
+        resp.set('Content-disposition', 'attachment; filename=users.csv');
+        resp.send(200, rendered);
+      });
+    });
+  }
 
 };

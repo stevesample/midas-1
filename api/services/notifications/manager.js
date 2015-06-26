@@ -145,7 +145,7 @@ function NotificationBuilder () {
         createdDate: createdDate,
         localParams: JSON.stringify(params.data.audience[audience]),
         globalParams: JSON.stringify(sails.config.notifications.triggerRoutes[params.trigger.action].audience[audience])
-      }).done(function (err, newNotification){
+      }).exec(function (err, newNotification){
         if (err) {
           sails.log.debug(err);
           done(null, newNotification, audience, user);
@@ -255,14 +255,6 @@ function NotificationBuilder () {
         localVars.settings = localVars.settings || {};
         // mix-in results of preflight functions
         localVars = lib.deepExtend(content, localVars);
-        // check if the recipient is the same as the initiator;
-        // if so, supress sending emails to yourself
-        if (localVars && localVars.fields && (recipient.id === localVars.fields.initiatorId)) {
-          // oohlala: The recipient is the same person as the initiator
-          // supress the delivery since clearly they know what they did.
-          done(null, null);
-          return false;
-        }
         // combine global default settings with local settings to produce master settings list
         synthesizeSettings(
           localVars,
@@ -304,7 +296,7 @@ function NotificationBuilder () {
           notificationId: notification.id,
           deliveryType: deliveryType,
           content: JSON.stringify(content)
-        }).done(function (err, delivery){
+        }).exec(function (err, delivery){
           if (err) { sails.log.debug(err); done(null, delivery); return false; }
           done(err, delivery);
         });
@@ -360,7 +352,7 @@ function NotificationBuilder () {
         UserSetting.find({
           userId: userSettingTemplate.userId,
           context: JSON.stringify({ action: userSettingTemplate.action, audience: userSettingTemplate.audience, delivery: userSettingTemplate.delivery })
-        }).done(function (err, settings) {
+        }).exec(function (err, settings) {
           if (err) { sails.log.debug(err); done(null, settings); return false;}
           userSettingObject = {};
           userSettingObject[userSettingTemplate.actionType] = {};
