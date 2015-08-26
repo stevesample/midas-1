@@ -5,8 +5,6 @@
  * @description :: Stores volunteer information for tasks
  *
  */
-var noteUtils = require('../services/notifications/manager');
-
 module.exports = {
 
   attributes: {
@@ -19,26 +17,19 @@ module.exports = {
   },
 
   // create notification after creating a volunteer
-  afterCreate: function (values, cb){
-    var params = {
-      trigger: {
-        callerType: 'Task',
-        callerId: values.taskId,
-        action: 'taskVolunteerAdded'
-      },
-      data: {
-        audience: {
-          'taskOwners': {
-            fields: {
-                taskId: values.taskId,
-                volunteerId: values.userId
-            }
-          }
-        }
-      }
-    };
+  afterCreate: function(model, done) {
+    Notification.create({
+      action: 'volunteer.create.thanks',
+      model: model
+    }, done);
+  },
 
-    noteUtils.notifier.notify(params, cb);
+  afterDestroy: function(model, done) {
+    Notification.create({
+      action: 'volunteer.destroy.decline',
+      // Sails returns an array of deleted models,
+      // but we're only deleting them one at a time
+      model: model[0]
+    }, done);
   }
-
 };

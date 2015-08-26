@@ -1,5 +1,0 @@
-name 'midas'
-version '0.0.1'
-depends 'postgresql'
-#depends 'nginx'
-depends 'nodejs'

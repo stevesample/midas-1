@@ -22,20 +22,24 @@ module.exports = {
     });
   },
 
+  findOne: function(req, res) {
+    module.exports.find(req, res);
+  },
+
   // Namespace the find() method that returns the array of objects into
   // a familiar findAll method.
   findAll: function (req, res) {
     // allow state to be set with a query parameter
-    var state = req.param('state', 'public');
+    var state = req.param('state', 'open');
 
     function processProjects (err, projects) {
-      if (err) return res.send(400, { message: i18n.t('projectAPI.errMsg.lookup_plural','Error looking up projects.')});
+      if (err) return res.send(400, { message: i18n.t('projectAPI.errMsg.lookupPlural','Error looking up projects.')});
       // also include projects where you are an owner
       if (!req.user) {
         return res.send({ projects: projects });
       }
-      ProjectOwner.find({ where: { userId: req.user[0].id }}).done(function (err, myprojects) {
-        if (err) return res.send(400, { message: i18n.t('projectAPI.errMsg.lookup_plural')});
+      ProjectOwner.find({ where: { userId: req.user[0].id }}).exec(function (err, myprojects) {
+        if (err) return res.send(400, { message: i18n.t('projectAPI.errMsg.lookupPlural')});
         var projIds = [];
         var myprojIds = [];
         // Get all of the active project IDs
@@ -52,8 +56,8 @@ module.exports = {
           return res.send({ projects: projects });
         }
         // Get the projects that I have access to but are draft
-        Project.find({ 'where': { 'id': myprojIds, 'state': 'draft' }}).done(function (err, myprojects) {
-          if (err) return res.send(400, { message: i18n.t('projectAPI.ErrMsg.lookup_plural')});
+        Project.find({ 'where': { 'id': myprojIds, 'state': 'draft' }}).exec(function (err, myprojects) {
+          if (err) return res.send(400, { message: i18n.t('projectAPI.ErrMsg.lookupPlural')});
           var finalprojects = projects.concat(myprojects);
           async.each(myprojects, util.addCounts, function (err) {
             if (err) return res.send(400, { message: i18n.t('projectAPI.errMsg.count','Error looking up project counts.')});
@@ -68,8 +72,8 @@ module.exports = {
       processProjects( null, [] );
     }
     else {
-      Project.find({ where: { 'state': state }}).done( function (err, projects) {
-        if (err) return res.send(400, { message: i18n.t('projectAPI.errMsg.lookup_plural')});
+      Project.find({ where: { 'state': state }, sort: {'updatedAt': -1}}).exec( function (err, projects) {
+        if (err) return res.send(400, { message: i18n.t('projectAPI.errMsg.lookupPlural')});
         async.each(projects, util.addCounts, function (err) {
           return processProjects(err, projects);
         });

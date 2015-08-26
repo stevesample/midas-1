@@ -1,250 +1,249 @@
-define([
-    'jquery',
-    'bootstrap',
-    'underscore',
-    'backbone',
-    'async',
-    'i18n',
-    'utilities',
-    'markdown_editor',
-    'tasks_collection',
-    'text!task_form_template',
-    'tag_factory'
-], function ($, Bootstrap, _, Backbone, async, i18n, utilities, MarkdownEditor, TasksCollection, TaskFormTemplate, TagFactory) {
+var Bootstrap = require('bootstrap');
+var _ = require('underscore');
+var Backbone = require('backbone');
+var async = require('async');
+var utilities = require('../../../../mixins/utilities');
+var MarkdownEditor = require('../../../../components/markdown_editor');
+var TasksCollection = require('../../../../entities/tasks/tasks_collection');
+var TaskFormTemplate = require('../templates/task_form_template.html');
+var TagFactory = require('../../../../components/tag_factory');
 
-  var TaskFormView = Backbone.View.extend({
+var TaskFormView = Backbone.View.extend({
 
-    el: "#task-list-wrapper",
+  el: "#container",
 
-    events: {
-      "blur .validate"        : "v",
-      "change #task-location" : "locationChange"
-    },
+  events: {
+    "change .validate"                : "v",
+    "click [name=task-time-required]" : "toggleTimeOptions",
+    "change #task-location"           : "locationChange",
+    "click #draft-button"             : "saveDraft",
+    "click #create-button"            : "submit"
+  },
 
-    initialize: function (options) {
-      this.options = _.extend(options, this.defaults);
-      this.tasks = this.options.tasks;
-      this.tagFactory = new TagFactory();
-      this.data = {};
-      this.data.newTag = {};
-      this.data.newItemTags = [];
-      this.initializeSelect2Data();
-      this.initializeListeners();
-    },
+  initialize: function (options) {
+    this.options = _.extend(options, this.defaults);
+    this.tasks = this.options.tasks;
+    this.tagFactory = new TagFactory();
+    this.data = {};
+    this.data.newTag = {};
+    this.data.newItemTags = [];
+    this.data.existingTags = [];
+    this.initializeSelect2Data();
+    this.initializeListeners();
+  },
 
-    initializeSelect2Data: function () {
-      var self = this;
-      var types = ["task-skills-required", "task-time-required", "task-people", "task-length", "task-time-estimate"];
+  initializeSelect2Data: function () {
+    var self = this;
+    var types = ["task-time-required", "task-length", "task-time-estimate", "task-skills-required"];
 
-      this.tagSources = {};
+    this.tagSources = {};
 
-      var requestAllTagsByType = function (type) {
-        $.ajax({
-          url: '/api/ac/tag?type=' + type + '&list',
-          type: 'GET',
-          async: false,
-          success: function (data) {
-            self.tagSources[type] = data;
+    var requestAllTagsByType = function (type) {
+      $.ajax({
+        url: '/api/ac/tag?type=' + type + '&list',
+        type: 'GET',
+        async: false,
+        success: function (data) {
+          if (type === 'task-time-estimate' || type === 'task-length') {
+            data = _.sortBy(data, 'updatedAt');
           }
-        });
-      }
-
-      async.each(types, requestAllTagsByType, function (err) {
-        self.render();
-      });
-    },
-
-    initializeListeners: function() {
-      var self = this;
-      
-      _.extend(this, Backbone.Events);
-
-      self.on('newTagSaveDone',function (){
-
-        tags         = [];
-        var tempTags = [];
-
-        //get newly created tags from big three types
-        _.each(self.data.newItemTags, function(newItemTag){
-          tags.push(newItemTag);
-        });
-
-        tempTags.push.apply(tempTags,self.$("#topics").select2('data'));
-        tempTags.push.apply(tempTags,self.$("#skills").select2('data'));
-        if (self.$("#task-location").select2('data').id == 'true') {
-          tempTags.push.apply(tempTags,self.$("#location").select2('data'));
+          else if (type === 'task-time-required') {
+            data = _.map(data, function (item) {
+              if (item.name == 'One time') {
+                item.description = 'A one time task with a defined timeline'
+              }
+              else if (item.name == 'Ongoing') {
+                item.description = 'Requires a portion of participant’s time until a goal is reached'
+              }
+              return item;
+            });
+          }
+          self.tagSources[type] = data;
         }
-        
-        //see if there are any previously created big three tags and add them to the tag array
-        _.each(tempTags,function(tempTag){
-            if ( tempTag.id !== tempTag.name ){
-            tags.push(tempTag);
-          }
-        });
-
-        //existing tags not part of big three
-        tags.push(self.$("#skills-required").select2('data'));
-        tags.push(self.$("#people").select2('data'));
-        tags.push(self.$("#time-required").select2('data'));
-        tags.push(self.$("#time-estimate").select2('data'));
-        tags.push(self.$("#length").select2('data'));
-        
-        async.forEach(
-          tags,
-          function(tag, callback){
-            //diffAdd,self.model.attributes.id,"taskId",callback
-            return self.tagFactory.addTag(tag,self.tempTaskId,"taskId",callback);
-          },
-          function(err){
-            self.model.trigger("task:modal:hide");
-            self.model.trigger("task:tags:save:success", err);
-          }
-        );
       });
+    };
 
+    async.each(types, requestAllTagsByType, function (err) {
+      self.render();
+    });
+  },
 
-      this.listenTo(this.tasks,"task:save:success", function (taskId){
-        //the only concern here is to add newly created tags which is only available in the three items below
-        //
+  initializeListeners: function() {
+    var self = this;
+    _.extend(this, Backbone.Events);
+  },
 
-        self.tempTaskId = taskId;
+  render: function () {
+    var template = _.template(TaskFormTemplate)({ tags: this.tagSources });
+    this.$el.html(template);
+    this.initializeSelect2();
+    this.initializeTextArea();
 
-        var newTags = [];
+    this.$('#time-options').css('display', 'none');
 
-        newTags = newTags.concat(self.$("#topics").select2('data'),self.$("#skills").select2('data'),self.$("#location").select2('data'));
-        
-        async.forEach(
-          newTags, 
-          function(newTag, callback) { 
-            return self.tagFactory.addTagEntities(newTag,self,callback);
-          }, 
-          function(err) {
-            if (err) return next(err);
-            self.trigger("newTagSaveDone");
-          }
-        );
+    this.$el.i18n();
 
-      });
-    },
+    // Return this for chaining.
+    return this;
+  },
 
-    getTagsFromPage: function () {
+  v: function (e) {
+    return validate(e);
+  },
 
-      // Gather tags for submission after the task is created
-      tags = {
-        topic: this.$("#topics").select2('data'),
-        skill: this.$("#skills").select2('data'),
-        location: this.$("#location").select2('data'),
-        'task-skills-required': [ this.$("#skills-required").select2('data') ],
-        'task-people': [ this.$("#people").select2('data') ],
-        'task-time-required': [ this.$("#time-required").select2('data') ],
-        'task-time-estimate': [ this.$("#time-estimate").select2('data') ],
-        'task-length': [ this.$("#length").select2('data') ]
-      };
+  initializeSelect2: function () {
+    var self = this;
 
-      return tags;
-    },
+    self.tagFactory.createTagDropDown({type:"skill",selector:"#task_tag_skills",width: "100%",tokenSeparators: [","],placeholder:"Start typing to select a tag"});
+    self.tagFactory.createTagDropDown({type:"location",selector:"#task_tag_location",tokenSeparators: [","]});
 
-    render: function () {
-      var template = _.template(TaskFormTemplate, { tags: this.tagSources })
-      this.$el.html(template);
-      this.initializeSelect2();
-      this.initializeTextArea();
+    // ------------------------------ //
+    // PRE-DEFINED SELECT MENUS BELOW //
+    // ------------------------------ //
 
-      // Important: Hide all non-currently opened sections of wizard.
-      this.$("section:not(.current)").hide();
-      this.$el.i18n();
+    self.$("#time-required").select2({
+      placeholder: 'Time Commitment',
+      width: 'resolve'
+    });
 
-      // Return this for chaining.
-      return this;
-    },
+    self.$("#task-length").select2({
+      placeholder: 'Frequency of work',
+      width: 'fullwidth'
+    });
 
-    v: function (e) {
-      return validate(e);
-    },
+    self.$("#time-estimate").select2({
+      placeholder: 'Estimated Time Required',
+      width: 'resolve'
+    });
 
-    childNext: function (e, current) {
-      // find all the validation elements
-      var children = current.find('.validate');
-      var abort = false;
-      _.each(children, function (child) {
-        var iAbort = validate({ currentTarget: child });
-        abort = abort || iAbort;
-      });
-      return abort;
-    },
+    self.$("#task-location").select2({
+      placeholder: 'Work Location',
+      width: 'resolve'
+    });
 
-    initializeSelect2: function () {
-      var self = this;
+  },
 
-      self.tagFactory.createTagDropDown({type:"skill",selector:"#skills"});
-      self.tagFactory.createTagDropDown({type:"topic",selector:"#topics"});
-      self.tagFactory.createTagDropDown({type:"location",selector:"#location"});
-      
-      self.$(".el-specific-location").hide();
+  initializeTextArea: function () {
+    if (this.md) { this.md.cleanup(); }
+    this.md = new MarkdownEditor({
+      data: '',
+      el: ".markdown-edit",
+      id: 'task-description',
+      title: i18n.t('Task') + ' Description',
+      rows: 6,
+      validate: ['empty']
+    }).render();
+  },
 
-      // ------------------------------ //
-      // PRE-DEFINED SELECT MENUS BELOW //
-      // ------------------------------ //
-      self.$("#skills-required").select2({
-        placeholder: "Required/Not Required",
-        width: 'resolve'
-      });
+  toggleTimeOptions: function (e) {
+    var currentValue      = this.$('[name=task-time-required]:checked').val(),
+        timeOptionsParent = this.$('#time-options'),
+        timeRequired      = this.$('#time-options-time-required'),
+        timeRequiredAside = this.$('#time-options-time-required aside'),
+        completionDate    = this.$('#time-options-completion-date'),
+        timeFrequency     = this.$('#time-options-time-frequency');
 
-      self.$("#time-required").select2({
-        placeholder: 'Time Commitment',
-        width: 'resolve'
-      });
+    timeOptionsParent.css('display', 'block');
+    if (currentValue == 1) { // time selection is "One time"
+      timeRequired.show();
+      completionDate.show();
+      timeRequiredAside.hide();
+      timeFrequency.hide();
+    }
+    else if (currentValue == 2) { // time selection is "On going"
+      timeRequired.show();
+      timeRequiredAside.show();
+      timeFrequency.show();
+      completionDate.hide();
+    }
+  },
 
-      self.$("#people").select2({
-        placeholder: 'Personnel Needed',
-        width: 'resolve'
-      });
+  locationChange: function (e) {
+    if (_.isEqual(e.currentTarget.value, "true")) {
+      this.$(".el-specific-location").show();
+    } else {
+      this.$(".el-specific-location").hide();
+    }
+  },
 
-      self.$("#length").select2({
-        placeholder: 'Deadline',
-        width: 'resolve'
-      });
+  validateBeforeSubmit: function (fields) {
+    var self  = this,
+        field, validation;
 
-      self.$("#time-estimate").select2({
-        placeholder: 'Estimated Time Required',
-        width: 'resolve'
-      });
+    for (var i=0; i<fields.length; i++) {
+      // remember: this.v() return true if there IS a validation error
+      // it returns false if there is not
+      field = fields[i];
+      valid = self.v({ currentTarget: field });
 
-      self.$("#task-location").select2({
-        placeholder: 'Work Location',
-        width: 'resolve'
-      });
-
-    },
-
-    initializeTextArea: function () {
-      if (this.md) { this.md.cleanup(); }
-      this.md = new MarkdownEditor({
-        data: '',
-        el: ".markdown-edit",
-        id: 'task-description',
-        placeholder: 'Description of ' + i18n.t('task') + ' including goals, expected outcomes and deliverables.',
-        title: i18n.t('Task') + ' Description',
-        rows: 6,
-        validate: ['empty']
-      }).render();
-    },
-
-    locationChange: function (e) {
-      if (_.isEqual(e.currentTarget.value, "true")) {
-        this.$(".el-specific-location").show();
-      } else {
-        this.$(".el-specific-location").hide();
+      if (valid === true) {
+        return false;
       }
-    },
-
-    cleanup: function () {
-      if (this.md) { this.md.cleanup(); }
-      removeView(this);
     }
 
-  });
+    return true;
+  },
+  saveDraft: function (e) {
+    var draft = true;
+    this.submit(e, draft);
+  },
+  submit: function (e, draft) {
+    var fieldsToValidate  = ['#task-title', '#task-description', '[name=task-time-required]:checked', '[name=time-required]:checked'],
+        validForm         = this.validateBeforeSubmit(fieldsToValidate),
+        completedBy       = this.$('#estimated-completion-date').val(),
+        data;
 
-  return TaskFormView;
+    if (!validForm && !draft) return this;
+
+    data = {
+      'title'      : this.$('#task-title').val(),
+      'description': this.$('#task-description').val(),
+      'projectId'  : null,
+      'tags'       : this.getTags()
+    };
+
+    if (draft) data['state'] = this.$('#draft-button').data('state');
+    if (completedBy != '') data['completedBy'] = completedBy;
+    console.log('submitting with', data);
+    this.collection.trigger("task:save", data);
+
+    return this;
+  },
+  getTags: function getTags() {
+    var tags          = [],
+        effortType    = this.$('[name=task-time-required]:checked').val(),
+        tagSkills     = this.$("#task_tag_skills").select2('data'),
+        tagLocation   = this.$("#task_tag_location").select2('data');
+
+    // check for the presence of data in these fields
+    // no data means no tags are supplied
+    // don't send those tags because the API returns 500
+    if (tagSkills != []) tags.push.apply(tags, tagSkills);
+    if (tagLocation != []) tags.push.apply(tags, tagLocation);
+    if (effortType) tags.push.apply(tags,[{ id: effortType }]);
+    tags.push.apply(tags,[this.$("#time-estimate").select2('data')]);
+
+    if (effortType == 1) { // time selection is "One time"
+
+    }
+    else if (effortType == 2) { // time selection is "On going"
+      tags.push.apply(tags,[this.$("#task-length").select2('data')]);
+    }
+
+    return _(tags).map(function(tag) {
+      return (tag.id && tag.id !== tag.name && tag.id !== undefined) ? +tag.id : {
+        name: tag.name,
+        type: tag.tagType,
+        data: tag.data
+      };
+    });
+    return tags;
+  },
+  cleanup: function () {
+    if (this.md) { this.md.cleanup(); }
+    removeView(this);
+  }
 
 });
+
+module.exports = TaskFormView;

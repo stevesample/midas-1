@@ -1,12 +1,11 @@
-define([
-	'jquery',
-	'underscore',
-	'backbone',
-	'utilities',
-	'async',
-	'marked',
-	'text!task_list_template'
-], function ($, _, Backbone, utils, async, marked, TaskListTemplate) {
+
+var _ = require('underscore');
+var Backbone = require('backbone');
+var utils = require('../../../../mixins/utilities');
+var async = require('async');
+var marked = require('marked');
+var TaskListTemplate = require('../templates/task_collection_view_template.html');
+
 
 	var TasksCollectionView = Backbone.View.extend({
 
@@ -25,32 +24,18 @@ define([
 				user: window.cache.currentUser
 			};
 
-			var requestTagData = function (task, done) {
-				$.ajax({
-					url: '/api/tag/findAllByTaskId/' + task.id,
-					async: false,
-					success: function (tags) {
-						task['tags'] = tags;
-						done();
-					},
-					error: function () {
-						task['tags'] = [];
-						done();
-					}
-				});
-			}
-
-			async.each(this.tasksJson.tasks, requestTagData, function () {
-				self.render();
-			});
-
+			self.render();
 		},
 
 		render: function () {
 			_.each(this.tasksJson.tasks, function(task) {
+				// Filter out "Required"/"Not Required" from the task tag cloud
+				task.tags = _.filter(task.tags, function(tag) {
+					return tag.type !== "task-skills-required";
+				});
 				task.description = marked(task.description);
 			});
-			this.compiledTemplate = _.template(TaskListTemplate, this.tasksJson);
+			this.compiledTemplate = _.template(TaskListTemplate)(this.tasksJson);
 			this.$el.html(this.compiledTemplate);
 
 			return this;
@@ -62,5 +47,4 @@ define([
 
 	});
 
-	return TasksCollectionView;
-});
+	module.exports = TasksCollectionView;

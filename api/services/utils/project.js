@@ -8,7 +8,7 @@ var userUtil = require('./user');
  * was found but access is denied.
  */
 var authorized = function (id, userId, cb) {
-  Project.findOneById(id, function (err, proj) {
+  Project.findOneById(id).populate('tags').exec(function (err, proj) {
     if (err || !proj) { return cb('Error finding project.', null); }
     // otherwise, check that we have an owner
     ProjectOwner.findByProjectId(proj.id, function(err, owners) {
@@ -21,8 +21,8 @@ var authorized = function (id, userId, cb) {
         }
         proj.owners.push({ id: owners[i].id, userId: owners[i].userId });
       }
-      // If project is public or public and closed/finished, continue
-      if ((proj.state === 'public') || (proj.state === 'closed') || (proj.isOwner)) {
+      // If project is open and closed/finished, continue
+      if ((proj.state === 'open') || (proj.state === 'closed') || (proj.isOwner)) {
         return cb(null, proj);
       }
       else {

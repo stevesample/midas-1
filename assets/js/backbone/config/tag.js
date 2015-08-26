@@ -3,11 +3,11 @@
  * tags for this installation.  The tags will be displayed
  * in the order of the array.
  */
-define({
+module.exports = {
   // This defines all of the tag elements for use in the app
   tags: {
     'skill': {
-      'icon': 'icon-atom',
+      'icon': 'fa fa-cog',
       'class': 'skill',
       'id': 'skill',
       'type': 'skill',
@@ -16,12 +16,12 @@ define({
     },
 
     'topic': {
-      'icon': 'icon-briefcase',
+      'icon': 'fa fa-tags',
       'class': 'topic',
       'id': 'topic',
       'type': 'topic',
-      'name': 'Topic',
-      'plural': 'Topics'
+      'name': 'Interest',
+      'plural': 'Interests'
     },
 
     'agency': {
@@ -34,7 +34,7 @@ define({
     },
 
     'location': {
-      'icon': 'icon-map-marker',
+      'icon': 'fa fa-map-marker',
       'class': 'location',
       'id': 'location',
       'type': 'location',
@@ -46,7 +46,7 @@ define({
     // Task-specific tags
     // ---
     'task-skills-required': {
-      'icon': 'icon-map-marker',
+      'icon': 'fa fa-map-marker',
       'class': 'task-skills-required',
       'id': 'task-skills-required',
       'type': 'task-skills-required',
@@ -55,7 +55,7 @@ define({
     },
 
     'task-time-required': {
-      'icon': 'icon-calendar-empty',
+      'icon': 'fa fa-calendar-o',
       'class': 'task-time-required',
       'id': 'task-time-required',
       'type': 'task-time-required',
@@ -64,7 +64,7 @@ define({
     },
 
     'task-people': {
-      'icon': 'icon-group',
+      'icon': 'fa fa-group',
       'class': 'task-people',
       'id': 'task-people',
       'type': 'task-people',
@@ -73,7 +73,7 @@ define({
     },
 
     'task-length': {
-      'icon': 'icon-bullseye',
+      'icon': 'fa fa-bullseye',
       'class': 'task-length',
       'id': 'task-length',
       'type': 'task-length',
@@ -82,7 +82,7 @@ define({
     },
 
     'task-time-estimate': {
-      'icon': 'icon-cogs',
+      'icon': 'fa fa-cogs',
       'class': 'task-time-estimate',
       'id': 'task-time-estimate',
       'type': 'task-time-estimate',
@@ -103,4 +103,4 @@ define({
 
   task      : ['skill', 'topic', 'location', 'task-people', 'task-time-estimate', 'task-time-required', 'task-length'],
   tasks     : ['skill', 'topic', 'agency', 'location', 'task-skills-required', 'task-time-required', 'task-people', 'task-length', 'task-time-estimate']
-});
+};

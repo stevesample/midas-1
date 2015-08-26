@@ -6,7 +6,7 @@ var path = require('path');
 module.exports = {
   init: function () {
     var j = request.jar();
-    var r = request.defaults({ jar: j, followRedirect: false });
+    var r = request.defaults({ jar: j, followRedirect: false, timeout: 120000 });
     return r;
   },
 
@@ -16,27 +16,27 @@ module.exports = {
       if (err) { return cb(err); }
       // then login
       request.post({ url: conf.url + '/auth/local',
-                     form: { username: username, password: password, json: true },
+                     form: { identifier: username, password: password, json: true },
                    }, function (err, response, body) {
         var getUser = function (cb) {
           request(conf.url + '/user', function (err, response, body) {
             if (err) { return cb(err); }
             if (response.statusCode !== 200) {
-              return cb('Error: Login unsuccessful. ' + body)
+              return cb('Error: Login unsuccessful. ' + body);
             }
             var b = JSON.parse(body);
             return cb(null, b);
           });
-        }
+        };
         if (response.statusCode == 403) {
           // this could be because the user isn't registered; try to register
           // console.log('register user: '+username);
-          request.post({ url: conf.url + '/auth/register',
+          request.post({ url: conf.url + '/auth/local/register',
                          form: { username: username, password: password, json: true },
                        }, function (err, response, body) {
             if (err) { return cb(err); }
             if (response.statusCode !== 200) {
-              return cb('Error: Register unsuccessful. ' + body)
+              return cb('Error: Register unsuccessful. ' + body);
             }
             getUser(cb);
           });
@@ -87,7 +87,7 @@ module.exports = {
       if (body[0] != '{') {
         pre = '<textarea data-type="application/json">';
         post = '</textarea>';
-        body = body.slice(pre.length, post.length * -1)
+        body = body.slice(pre.length, post.length * -1);
       }
       var b = JSON.parse(body);
       if (b.status == 500) return cb(new Error("500 Error from POST", b));
@@ -105,7 +105,17 @@ module.exports = {
     request.post({ url: url,
                    body: JSON.stringify(obj)
                  }, function(err, response, body) {
-      if (err) { return cb(err, null); }
+      if (err || response.statusCode >= 400) { return cb(err, null); }
+      var b = JSON.parse(body);
+      cb(null, b);
+    });
+  },
+
+  put: function (request, url, obj, cb) {
+    request.put({ url: url,
+                   body: JSON.stringify(obj)
+                 }, function(err, response, body) {
+      if (err || response.statusCode >= 400) { return cb(err, null); }
       var b = JSON.parse(body);
       cb(null, b);
     });
@@ -121,9 +131,13 @@ module.exports = {
 
   proj_put: function(request, proj, cb) {
     var r = request.put({
-      url: conf.url + '/project',
+      url: conf.url + '/project/'+proj.id,
       body: JSON.stringify(proj)
     }, function(err, response, body) {
+      if (response.statusCode !== 200) {
+        return cb(new Error("Project Update failed with response: "+ response.statusCode + " " + body));
+      }
+
       if (err) { return cb(err, null); }
       var b = JSON.parse(body);
       cb(null, b);
@@ -143,16 +157,16 @@ module.exports = {
   },
 
   tag_find: function(request, name, type, cb) {
-    var url = conf.url + '/ac/tag?q=' + name;
+    var url = conf.url + '/ac/tag?q=' + encodeURIComponent(name);
     if (type) {
-      url = url + '&type=' + type;
+      url = url + '&type=' + encodeURIComponent(type);
     }
     var r = request.get({
       url: url
     }, function(err, response, body) {
       if (err) { return cb(err, null); }
       var b = JSON.parse(body);
-      for (i in b) {
+      for (var i in b) {
         if (b[i].name.toLowerCase() == name.toLowerCase()) {
           return cb(null, b[i]);
         }
@@ -162,11 +176,14 @@ module.exports = {
   },
 
   tag_add: function(request, tag, cb) {
-    this.post(request, conf.url + '/tag/add', tag, cb);
+    this.post(request, conf.url + '/tagentity', tag, cb);
   },
 
   tag_create: function(request, tag, cb) {
-    this.post(request, conf.url + '/tag', tag, cb);
+    var model = (tag.projectId) ? 'project': 'user',
+        modelId = tag[model + 'Id'],
+        data = { tags: [tag.tagId] };
+    this.put(request, conf.url + '/' + model + '/' + modelId, data, cb);
   }
 
 };
