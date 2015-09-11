@@ -221,7 +221,8 @@ var TaskFormView = Backbone.View.extend({
     if (tagSkills != []) tags.push.apply(tags, tagSkills);
     if (tagLocation != []) tags.push.apply(tags, tagLocation);
     if (effortType) tags.push.apply(tags,[{ id: effortType }]);
-    tags.push.apply(tags,[this.$("#time-estimate").select2('data')]);
+    //prevents tags array from getting populated with null values
+    if(this.$("#time-estimate").select2('data')) tags.push.apply(tags,[this.$("#time-estimate").select2('data')]);
 
     if (effortType == 1) { // time selection is "One time"
 

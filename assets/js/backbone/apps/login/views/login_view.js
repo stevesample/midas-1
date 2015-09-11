@@ -45,17 +45,7 @@ var LoginView = Backbone.View.extend({
       el: this.$(".password-view")
     }).render();
 
-    if (data.login.agency.enabled === true || data.login.agency.enabled === true) {
-
-      if (data.login.agency.enabled === true) {
-        var agencyTags = this.tagFactory.createTagDropDown({
-              type:"agency",
-              selector:"#ragency",
-              width: "100%",
-              multiple: false,
-              allowCreate: false
-            });
-      }
+    if (data.login.agency.enabled === true) {
 
       if (data.login.location.enabled === true) {
         var locationTags = this.tagFactory.createTagDropDown({
