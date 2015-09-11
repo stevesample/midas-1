@@ -20,8 +20,6 @@ var LoginView = Backbone.View.extend({
     'blur #rpassword'                : 'checkPassword',
     'keyup #rpassword-confirm'       : 'checkPasswordConfirm',
     'blur #rpassword-confirm'        : 'checkPasswordConfirm',
-    'click #register-next'           : 'nextRegistrationView',
-    'click #register-previous'       : 'previousRegistrationView',
     'submit #login-password-form'    : 'submitLogin',
     'submit #registration-form'      : 'submitRegister',
     'submit #forgot-form'            : 'submitForgot'
@@ -45,55 +43,12 @@ var LoginView = Backbone.View.extend({
       el: this.$(".password-view")
     }).render();
 
-    if (data.login.agency.enabled === true || data.login.agency.enabled === true) {
-
-      if (data.login.agency.enabled === true) {
-        var agencyTags = this.tagFactory.createTagDropDown({
-              type:"agency",
-              selector:"#ragency",
-              width: "100%",
-              multiple: false,
-              allowCreate: false
-            });
-      }
-
-      if (data.login.location.enabled === true) {
-        var locationTags = this.tagFactory.createTagDropDown({
-              type:"location",
-              selector:"#rlocation",
-              width: "100%",
-              multiple: false
-            });
-      }
-
-      this.$('#registration-footer-cancel-next').show();
-      this.$('#registration-footer-prev-submit').hide();
-      this.$('#optional-registration-view').hide();
-
-    }
+    this.$('#registration-footer-cancel-next').show();
 
     setTimeout(function () {
       self.$("#username").focus();
     }, 500);
     return this;
-  },
-
-  // functions to switch out the primary and secondary registration views
-  // this happens when either agency or location are configured to be required
-  // for users to sign up for the system
-  nextRegistrationView: function () {
-    this.$('#default-registration-view').hide();
-    this.$('#optional-registration-view').show();
-
-    this.$('#registration-footer-cancel-next').hide();
-    this.$('#registration-footer-prev-submit').show();
-  },
-  previousRegistrationView: function () {
-    this.$('#default-registration-view').show();
-    this.$('#optional-registration-view').hide();
-
-    this.$('#registration-footer-cancel-next').show();
-    this.$('#registration-footer-prev-submit').hide();
   },
 
   link: function (e) {
