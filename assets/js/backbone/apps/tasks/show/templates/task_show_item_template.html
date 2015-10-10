@@ -99,11 +99,11 @@
             <div id="modal-volunteer"></div>
             <ul class="nav nav-pills nav-stacked">
               <li class="volunteer-true" style="display: none;">
-                <a href="#" id="volunteered" class="btn btn-c1"><i class="fa fa-thumbs-up"></i> <span class="box-icon-text" data-i18n="taskPage.volunteeredButton">Volunteered!</span></a>
+                <a href="#" id="volunteered" class="btn btn-c1"><i class="fa fa-thumbs-up"></i> <span class="box-icon-text" data-i18n="taskPage.volunteeredButton">Participated</span></a>
 
               </li>
               <li class="volunteer-false">
-                <a href="#" id="volunteer" class="btn btn-c2"><i class="fa fa-thumbs-o-up"></i> <span class="box-icon-text" data-i18n="taskPage.volunteerButton">Volunteer</span></a>
+                <a href="#" id="volunteer" class="btn btn-c2"><i class="fa fa-thumbs-o-up"></i> <span class="box-icon-text" data-i18n="taskPage.volunteerButton">Participate</span></a>
               </li>
             </ul>
           </div>
@@ -251,16 +251,18 @@
             </h2>
           </div>
           <div class="box-main" id="task-volunteers">
-            <div class="project-people-div" data-userid="<%- model.userId %>">
-              <img src="/api/user/photo/<%- model.userId %>" class="project-people" alt="<%- model.owner.name %>"/>
+            <div class="project-people-show-div" data-userid="<%- model.userId %>">
+              <img src="/api/user/photo/<%- model.userId %>" alt="<%- model.owner.name %>"/>
+              <label class="project-people-show-label"><%- model.owner.name %></label>
             </div>
             <div class="project-people-space">
               <div class="bar">
               </div>
             </div>
             <% _.each(model.volunteers, function (v) { %>
-            <div class="project-people-div" data-userid="<%- v.userId %>" data-voluserid="<%- v.userId %>">
-              <img src="/api/user/photo/<%- v.userId %>" class="project-people" alt="<%- v.name %>"/>
+            <div class="project-people-show-div" data-userid="<%- v.userId %>" data-voluserid="<%- v.userId %>">
+              <img src="/api/user/photo/<%- v.userId %>" alt="<%- v.name %>"/>
+              <label class="project-people-show-label"><%- v.name %></label>
             </div>
             <% }); %>
           </div>

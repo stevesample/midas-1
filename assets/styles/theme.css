@@ -21,7 +21,6 @@ h3 {
   padding-bottom: 10px;
   padding-left: 10px;
   font-size: 21px;
-  background-color: #B72467;
 }
 
 h4 {
@@ -110,6 +109,36 @@ footer a {
 
 .c3-bg {
   background-color: #39B7EA;
+}
+
+/**
+ * FORMS
+ */
+fieldset + fieldset {
+  margin-top:2em;
+}
+
+fieldset aside {
+  background-color: #797979;
+  color: white;
+  line-height: 1.2;
+  padding: 1em;
+}
+/* provide space between <aside> and input fields
+   on smaller resolutions
+*/
+@media (max-width: 992px) {
+  aside {
+    margin-top: 15px;
+  }
+}
+aside h4 {
+  color: white;
+}
+
+/* including #task-form to test for adverse effects */
+#task-form label {
+  display: block;
 }
 
 /**
@@ -394,7 +423,7 @@ footer a {
   background-color: #D63A25;
 }
 
-.navbar .nav .divider-vertical {
+.navbar .nav .navbar-divider {
   background-color: #dd361a;
 }
 .navbar-brand,
@@ -425,13 +454,8 @@ footer a {
 }
 
 .alert-info {
-  background-image: -webkit-gradient(linear, left 0%, left 100%, from(#d9edf7), to(#b9def0));
-  background-image: -webkit-linear-gradient(top, #d9edf7, 0%, #b9def0, 100%);
-  background-image: -moz-linear-gradient(top, #d9edf7 0%, #b9def0 100%);
-  background-image: linear-gradient(to bottom, #d9edf7 0%, #b9def0 100%);
-  background-repeat: repeat-x;
+  background-color: white;
   border-color: #9acfea;
-  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#ffd9edf7', endColorstr='#ffb9def0', GradientType=0);
 }
 
 .alert-warning {

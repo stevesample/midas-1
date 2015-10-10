@@ -240,6 +240,152 @@ module.exports = {
   },
 
   /**
+   * Task metrics API
+   * Provides data for the task metrics section of the admin
+   * dashboard. At some point, it may be consolidated
+   * with the above endpoint.
+   */
+  taskMetrics: function(req, res) {
+    var pad = function(num, size) {
+          size = size || 2;
+          var s = num + '';
+          while (s.length < size) s = '0' + s;
+          return s;
+        },
+        getFY = function(input) {
+          if (!input) return undefined;
+          var date = new Date(input);
+          return new Date(date.setMonth(date.getMonth() + 3)).getFullYear();
+        },
+        getYear = function(input) {
+          if (!input) return undefined;
+          return new Date(input).getFullYear();
+        },
+        getMonth = function(input) {
+          if (!input) return undefined;
+          var date = new Date(input);
+          return +date.getFullYear() + pad((date.getMonth() + 1));
+        },
+        getWeek = function(input) {
+          if (!input) return undefined;
+          var date = new Date(input);
+          var getWeekNumber = function(date) {
+                var d = new Date(date);
+                d.setHours(0,0,0);
+                d.setDate(d.getDate()+4-(d.getDay()||7));
+                return Math.ceil((((d-new Date(d.getFullYear(),0,1))/8.64e7)+1)/7);
+              };
+          return +date.getFullYear() + pad(getWeekNumber(date));
+        },
+        getQuarter = function(input) {
+          if (!input) return undefined;
+          var date = new Date(input),
+              month = date.getMonth() + 1,
+              quarter = month <= 3 ? '1' :
+                        month <= 6 ? '2' :
+                        month <= 9 ? '3' : '4';
+          return +date.getFullYear() + quarter;
+        },
+        getFYQuarter = function(input) {
+          if (!input) return undefined;
+          var date = new Date(input),
+              fyDate = new Date(date.setMonth(date.getMonth() + 3)),
+              month = fyDate.getMonth() + 1,
+              quarter = month <= 3 ? '1' :
+                        month <= 6 ? '2' :
+                        month <= 9 ? '3' : '4';
+          return +fyDate.getFullYear() + quarter;
+        },
+        output = {
+          tasks: {},
+          volunteers: {},
+          agencies: {}
+        },
+        count = req.param('group') === 'week' ? getWeek :
+                req.param('group') === 'month' ? getMonth :
+                req.param('group') === 'quarter' ? getQuarter :
+                req.param('group') === 'fyquarter' ? getFYQuarter :
+                req.param('group') === 'year' ? getYear : getFY;
+
+    async.parallel([
+      function(done) {
+        Task.find({}).exec(function(err, tasks) {
+          if (err) return done('task');
+          var groups = {
+                carryOver: {},
+                published: _.countBy(tasks, function(task) {
+                  return count(task.publishedAt);
+                }),
+                completed: _.countBy(tasks, function(task) {
+                  return count(task.completedAt);
+                })
+              },
+              range = _.keys(groups.published);
+
+          // Evaluate whether a task was started and remained open in a previous FY
+          _.each(tasks, function(task) {
+            range.forEach(function(i) {
+              var openedBefore = count(task.publishedAt) < i,
+                  openAfter = task.state !== 'archived' &&
+                    (!task.completedAt || count(task.completedAt) > i);
+              groups.carryOver[i] = groups.carryOver[i] || 0;
+              if (openedBefore && openAfter) groups.carryOver[i] += 1;
+            });
+          });
+
+          output.range = range;
+          output.tasks = groups;
+          done();
+        });
+      },
+      function(done) {
+        Volunteer.find({}).exec(function(err, volunteers) {
+          if (err) return done('volunteer');
+
+          // Group volunteers by created FY
+          output.volunteers = _.groupBy(volunteers, function(volunteer) {
+            return count(volunteer.createdAt);
+          });
+
+          // Get volunteer users and tags to count agencies
+          User.find({ id: _.pluck(volunteers, 'userId') })
+            .populate('tags', { type: 'agency' })
+            .exec(function(err, users) {
+              if (err) return done('volunteer');
+
+              // Get unique agencies with volunteers
+              output.agencies = _.reduce(output.volunteers, function(o, vols, fy) {
+
+                // Return agency (first tag) for matching user
+                o[fy] = _(vols).map(function(vol) {
+                  var volUser = _.findWhere(users, { id: vol.userId });
+                  if (!volUser || !volUser.tags || !volUser.tags[0]) return undefined;
+                  return (volUser.tags[0] || {}).id;
+                }).compact().uniq().value().length;
+
+                return o;
+
+              }, {});
+
+              // Count volunteers
+              output.volunteers = _.reduce(output.volunteers, function(o, vols, fy) {
+                o[fy] = vols.length;
+                return o;
+              }, {});
+
+              done();
+            });
+
+        });
+      }
+    ], function(err) {
+      if (err) res.serverError(err + ' metrics are unavailable.');
+      res.send(output);
+    });
+  },
+
+
+  /**
    * Add or remove admin priviledges from a user account
    * @param id the user id to make an admin or remove
    * @param action true to make admin, false to revoke
@@ -301,7 +447,8 @@ module.exports = {
 
         // Get comment model
         steps.push(function(done) {
-          Comment.findOne({ id: event.callerId }).exec(function(err, result) {
+          var id = (event.model || {}).id;
+          Comment.findOne({ id: id }).exec(function(err, result) {
             if (err) return done('Failed to find model' + err);
             activity.comment = result || {};
             activity.comment.value = activity.comment.value || "";
@@ -335,7 +482,9 @@ module.exports = {
         });
 
         async.series(steps, function(err) {
-          if ( activity.comment.value == "" ) { activity.comment = {}; }
+          if (!activity.comment || activity.comment.value === "") {
+            activity.comment = {};
+          }
           done(err, activity);
         });
 
@@ -350,7 +499,8 @@ module.exports = {
 
         // Get task model
         steps.push(function(done) {
-          Task.findOne({ id: event.callerId }).exec(function(err, result) {
+          var id = (event.model || {}).taskId;
+          Task.findOne({ id: id }).exec(function(err, result) {
             if (err) return done('Failed to find model' + err);
             activity.task = result;
             done();
@@ -359,8 +509,8 @@ module.exports = {
 
         // Get user model
         steps.push(function(done) {
-          var userId = JSON.parse(event.localParams).fields.volunteerId;
-          User.findOne({ id: userId }).exec(function(err, user) {
+          var id = (event.model || {}).userId;
+          User.findOne({ id: id }).exec(function(err, user) {
             if (err) return done('Failed to find model' + err);
             activity.user = user;
             done();
@@ -381,34 +531,15 @@ module.exports = {
 
         // Get user model
         steps.push(function(done) {
-          var userId = JSON.parse(event.localParams).fields.userId;
-          User.findOne({ id: userId }).exec(function(err, user) {
+          var id = (event.model || {}).id;
+          User.findOne({ id: id }).exec(function(err, user) {
             if (err) return done('Failed to find model' + err);
             activity.user = user;
             done();
           });
         });
 
-        async.series(steps, function(err) { done(err, activity) });
-      },
-
-      updatedUser: function(event, done) {
-        var activity = {
-          type: 'updatedUser',
-          createdAt: event.createdAt
-        },
-        steps = [];
-
-        // Get user model
-        steps.push(function(done) {
-          User.findOne({ id: event.callerId }).exec(function(err, user) {
-            if (err) return done('Failed to find model' + err);
-            activity.user = user;
-            done();
-          });
-        });
-
-        async.series(steps, function(err) { done(err, activity) });
+        async.series(steps, function(err) { done(err, activity); });
       },
 
       newTask: function(event, done) {
@@ -420,7 +551,8 @@ module.exports = {
 
         // Get task model
         steps.push(function(done) {
-          Task.findOne({ id: event.callerId }).exec(function(err, task) {
+          var id = (event.model || {}).id;
+          Task.findOne({ id: id }).exec(function(err, task) {
             if (err) return done('Failed to find model' + err);
             activity.task = task;
             done();
@@ -437,22 +569,21 @@ module.exports = {
           });
         });
 
-        async.series(steps, function(err) { done(err, activity) });
+        async.series(steps, function(err) { done(err, activity); });
       }
 
     };
 
     // Map actions to templates
     var actions = {
-      projectCommentAdded: templates.newComment,
-      taskCommentAdded: templates.newComment,
-      taskVolunteerAdded: templates.newVolunteer,
-      welcomeUser: templates.newUser,
-      taskCreated: templates.newTask
+      'comment.create.owner': templates.newComment,
+      'volunteer.create.thanks': templates.newVolunteer,
+      'user.create.welcome': templates.newUser,
+      'task.create.thanks': templates.newTask
     };
 
     // Get active notifications
-    Notification.find({ isActive: true })
+    Notification.find({})
       .sort(sort)
       .paginate({ page: page, limit: limit})
       .exec(next);
@@ -465,9 +596,6 @@ module.exports = {
       });
 
       var activities = [];
-
-      // Filter unique notifications
-      notifications = _.uniq(notifications, false, 'triggerGuid');
 
       // Apply templates
       async.map(notifications, function(notification, done) {

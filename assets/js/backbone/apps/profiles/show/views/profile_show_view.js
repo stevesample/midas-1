@@ -9,11 +9,10 @@ var MarkdownEditor = require('../../../../components/markdown_editor');
 var marked = require('marked');
 var TagShowView = require('../../../tag/show/views/tag_show_view');
 var ProfileTemplate = require('../templates/profile_show_template.html');
-var EmailTemplate = require('../templates/profile_email_template.html');
+var ShareTemplate = require('../templates/profile_share_template.txt');
 var Login = require('../../../../config/login.json');
 var ModalComponent = require('../../../../components/modal');
 var PAView = require('./profile_activity_view');
-var EmailFormView = require('../../email/views/profile_email_view');
 var TagFactory = require('../../../../components/tag_factory');
 
 
@@ -25,14 +24,14 @@ var ProfileShowView = Backbone.View.extend({
     "click .link-backbone"       : linkBackbone,
     "click #profile-cancel"      : "profileCancel",
     "click #like-button"         : "like",
-    "keyup #name, #title, #bio"  : "fieldModified",
-    "keyup"                      : "checkName",
-    "change"                     : "checkName",
-    "blur"                       : "checkName",
+    "keyup"                      : "fieldModified",
+    "change"                     : "fieldModified",
+    "blur"                       : "fieldModified",
     "click .removeAuth"          : "removeAuth"
   },
 
   initialize: function (options) {
+    var self = this;
     this.options = options;
     this.data = options.data;
     this.tagFactory = new TagFactory();
@@ -45,6 +44,18 @@ var ProfileShowView = Backbone.View.extend({
       this.saved = true;
       this.data.saved = false;
     }
+    // Handle email validation errors
+    this.model.on('error', function(model, xhr) {
+      var error = xhr.responseJSON;
+      if (error.invalidAttributes && error.invalidAttributes.username) {
+        var message = _(error.invalidAttributes.username)
+              .pluck('message').join(', ')
+              .replace(/record/g, 'user')
+              .replace(/undefined/g, 'email')
+              .replace(/`username`/g, 'email');
+        self.$("#email-update-alert").html(message).show();
+      }
+    });
   },
 
   render: function () {
@@ -57,7 +68,7 @@ var ProfileShowView = Backbone.View.extend({
       ui: UIConfig
     };
 
-    data.email = (data.data.emails && data.data.emails.length) ? data.data.emails[0] : '';
+    data.email = data.data.username;
 
     if (data.data.bio) {
       data.data.bioHtml = marked(data.data.bio);
@@ -125,18 +136,22 @@ var ProfileShowView = Backbone.View.extend({
   },
 
   updateProfileEmail: function(){
-    var self = this;
-    $.ajax({
-      url: encodeURI('/api/email/makeURL?email=contactUserAboutProfile&subject=Check Out "'+ self.model.attributes.name + '"' +
-      '&profileTitle=' + (self.model.attributes.title || '') +
-      '&profileLink=' + window.location.protocol + "//" + window.location.host + "" + window.location.pathname +
-      '&profileName=' + (self.model.attributes.name || '') +
-      '&profileLocation=' + (self.model.attributes.location ? self.model.attributes.location.name : '') +
-      '&profileAgency=' + (self.model.agency ? self.model.agency.name : '')),
-      type: 'GET'
-    }).done( function (data) {
-      self.$('#email').attr('href', data);
-    });
+    var subject = 'Take A Look At This Profile',
+        data = {
+          profileTitle: this.model.get('title'),
+          profileLink: window.location.protocol +
+            "//" + window.location.host + "" + window.location.pathname,
+          profileName: this.model.get('name'),
+          profileLocation: this.model.get('location') ?
+            this.model.get('location').name : '',
+          profileAgency: this.model.get('agency') ?
+            this.model.get('agency').name : ''
+        },
+        body = _.template(ShareTemplate)(data),
+        link = 'mailto:?subject=' + encodeURIComponent(subject) +
+          '&body=' + encodeURIComponent(body);
+
+    this.$('#email').attr('href', link);
   },
 
   initializeTags: function() {
@@ -187,7 +202,8 @@ var ProfileShowView = Backbone.View.extend({
   updatePhoto: function () {
     var self = this;
     this.model.on("profile:updatedPhoto", function (data) {
-      var url = '/api/user/photo/' + data.attributes.id;
+      //added timestamp to URL to force FF to reload image from server
+      var url = '/api/user/photo/' + data.attributes.id + "?" + new Date().getTime();
       // force the new image to be loaded
       $.get(url, function (data) {
         $("#project-header").css('background-image', "url('" + url + "')");
@@ -202,14 +218,6 @@ var ProfileShowView = Backbone.View.extend({
 
   initializeForm: function() {
     var self = this;
-
-    $("#topics").on('change', function (e) {
-      self.model.trigger("profile:input:changed", e);
-    });
-
-    $("#skills").on('change', function (e) {
-      self.model.trigger("profile:input:changed", e);
-    });
 
     this.listenTo(self.model, "profile:save:success", function (data) {
       // Bootstrap .button() has execution order issue since it
@@ -258,142 +266,29 @@ var ProfileShowView = Backbone.View.extend({
 
   initializeSelect2: function () {
     var self = this;
-
-    var formatResult = function (object, container, query) {
-      return object.name;
-    };
-
     var modelJson = this.model.toJSON();
 
-    var locationSettings = {
-      placeholder: 'Select a Location',
-      formatResult: formatResult,
-      formatSelection: formatResult,
-      minimumInputLength: 1,
-      data: [ location ],
-      createSearchChoice: function (term, values) {
-        var vals = values.map(function(value) {
-          return value.value.toLowerCase();
-        });
-
-        //unmatched = true is the flag for saving these "new" tags to tagEntity when the opp is saved
-        return (vals.indexOf(term.toLowerCase()) >=0) ? false : {
-          tagType: 'location',
-          id: term,
-          value: term,
-          temp: true,
-          name: "<b>"+term+"</b> <i>search for this location</i>"
-        };
-      },
-      ajax: {
-        url: '/api/ac/tag',
-        dataType: 'json',
-        data: function (term) {
-          return {
-            type: 'location',
-            q: term
-          };
-        },
-        results: function (data) {
-          return { results: data };
-        }
-      }
-    };
-
-    $("#company").select2({
-      placeholder: 'Select an Agency',
-      formatResult: formatResult,
-      formatSelection: formatResult,
-      minimumInputLength: 2,
-      ajax: {
-        url: '/api/ac/tag',
-        dataType: 'json',
-        data: function (term) {
-          return {
-            type: 'agency',
-            q: term
-          };
-        },
-        results: function (data) {
-          return { results: data };
-        }
-      }
-    });
-    if (modelJson.agency) {
-      $("#company").select2('data', modelJson.agency);
-    }
-
-    $("#topics").on('change', function (e) {
-      self.model.trigger("profile:input:changed", e);
+    /*
+      The location and company selectors differ from the
+      defaults in tag_show_view, so they are explicitly
+      created here (with different HTML IDs than normal,
+      to avoid conflicts).
+    */
+    this.tagFactory.createTagDropDown({
+      type:        "location",
+      selector:    "#location",
+      multiple:    false,
+      data:        modelJson.location,
+      width:       "100%"
     });
 
-    $("#skills").on('change', function (e) {
-      self.model.trigger("profile:input:changed", e);
-    });
-
-    $("#company").on('change', function (e) {
-      self.model.trigger("profile:input:changed", e);
-    });
-    $('#location').select2(locationSettings).on('select2-selecting', function(e) {
-      var $el = self.$(e.currentTarget),
-          el = this;
-      if (e.choice.temp) {
-        this.temp = true;
-        $('#location').select2('data', e.choice.name);
-        $.get('/api/location/suggest?q=' + e.choice.value, function(d) {
-          d = _(d).map(function(item) {
-            return {
-              id: item.name,
-              text: item.name,
-              name: item.name,
-              unmatched: true,
-              tagType: 'location',
-              data: _(item).omit('name')
-            };
-          });
-          el.reload = true;
-          el.open = true;
-          $('#location').select2({
-            data: d,
-            formatResult: function (obj) { return obj.name; },
-            formatSelection: function (obj) { return obj.name; },
-            createSearchChoice: function (term, values) {
-              if (!values.some(function (v) {
-                  return (v.name.toLowerCase().indexOf(term.toLowerCase()) >= 0);
-                })) {
-                return {
-                  tagType: 'location',
-                  id: term,
-                  value: term,
-                  temp: true,
-                  name: "<b>" + term + "</b> <i>search for this location</i>"
-                };
-              }
-            }
-          }).select2('open');
-        });
-      } else {
-        delete this.temp;
-      }
-    }).on('select2-open', function(e) {
-      if (!this.reload && this.open) {
-        delete this.open;
-        delete this.temp;
-        var cache = $("#location").select2('data');
-        setTimeout(function() {
-          $("#location").select2(locationSettings)
-            .select2('data', cache)
-            .select2('open');
-        }, 0);
-      } else if (this.reload && this.open) {
-        delete this.reload;
-      }
-    });
-    if (modelJson.location) {
-      $("#location").select2('data', modelJson.location);
-    }
-    $("#location").on('change', function (e) {
-      self.model.trigger("profile:input:changed", e);
+    this.tagFactory.createTagDropDown({
+      type:        "agency",
+      selector:    "#company",
+      multiple:    false,
+      allowCreate: false,
+      data:        modelJson.agency,
+      width:       "100%",
     });
   },
 
@@ -410,16 +305,12 @@ var ProfileShowView = Backbone.View.extend({
   },
 
   fieldModified: function (e) {
-    this.model.trigger("profile:input:changed", e);
-  },
 
-  checkName: function (e) {
-    var name = this.$("#name").val();
-    if (name && name !== '') {
-      $("#name").closest(".form-group").find(".help-block").hide();
-    } else {
-      $("#name").closest(".form-group").find(".help-block").show();
-    }
+    //check that the name isn't a null string
+    var $help = this.$("#name").closest(".form-group").find(".help-block");
+    $help.toggle( this.$("#name").val() === "" );
+
+    this.model.trigger("profile:input:changed", e);
   },
 
   profileCancel: function (e) {
@@ -447,21 +338,17 @@ var ProfileShowView = Backbone.View.extend({
           $("#company").select2('data'),
           $("#tag_topic").select2('data'),
           $("#tag_skill").select2('data'),
-          $("#tag_location").select2('data'),
-          $("#location").select2('data'),
-          $("#tag_agency").select2('data')
+          $("#location").select2('data')
         ),
-        modelTags = _(this.model.get('tags')).filter(function(tag) {
-          return (tag.type !== 'agency' && tag.type !== 'location');
-        }),
         data = {
-          name: $("#name").val(),
+          name:  $("#name").val(),
           title: $("#title").val(),
           bio: $("#bio").val(),
+          username: $("#profile-email").val()
         },
-        email = this.model.get('emails')[0],
+        email = this.model.get('username'),
         self = this,
-        tags = _(modelTags.concat(newTags)).chain()
+        tags = _(newTags).chain()
           .filter(function(tag) {
             return _(tag).isObject() && !tag.context;
           })
@@ -475,29 +362,13 @@ var ProfileShowView = Backbone.View.extend({
 
     data.tags = tags;
 
-    if ($("#profile-email").val() !== email.email) {
-      $.ajax({
-        url: '/api/useremail/' + email.id,
-        dataType: 'json',
-        method: 'put',
-        data: { email: $("#profile-email").val() },
-        success: function() { self.model.trigger("profile:save", data); },
-        error: function() {
-          var msg = 'Failed to update your email address. Please verify it ' +
-                    'is a valid email address and try again.';
-          $("#email-update-alert").html(msg);
-          $("#email-update-alert").show();
-        }
-      });
-    } else {
-      this.model.trigger("profile:save", data);
-    }
+    this.model.trigger("profile:save", data);
   },
 
   removeAuth: function (e) {
     if (e.preventDefault) e.preventDefault();
     var node = $(e.currentTarget);
-    this.model.trigger("profile:removeAuth", node.data("id"));
+    this.model.trigger("profile:removeAuth", node.data("service"));
   },
 
   like: function (e) {

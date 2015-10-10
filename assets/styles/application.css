@@ -60,6 +60,13 @@ input {
   padding: 0 0 0 5px;
 }
 
+.overflow-x {
+  overflow-x: auto;
+}
+.overflow-x th {
+  white-space: pre-line;
+}
+
 /* Override bootstrap's .row margins for mobile & tablet */
 @media (max-width: 978px) {
   .row {
@@ -214,6 +221,10 @@ input[type="submit"] {
   border-radius: 3px;
 }
 
+.modal-content textarea {
+  resize: vertical;
+}
+
 .modal-footer-text {
   font-size: 13px;
   text-align: left;
@@ -292,19 +303,27 @@ h1, h2, h3, h4, h5, h6 {
 }
 /*-----------------*/
 
-.navbar .nav .navbar-title-small {
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.navbar .nav .navbar-title-big {
+.navbar .nav .navbar-title {
   font-size: 18px;
+  height: 40px;
+  padding-top: 10px;
 }
 
-.navbar .nav .divider-vertical {
+.navbar .nav .navbar-divider {
+  /* vertical divider */
   background-color: white;
-  height: 40px;
+  height: 50px;
   width: 1px;
+}
+
+
+
+@media (max-width: 768px) {
+  /* horizontal divider */
+  .navbar .nav .navbar-divider {
+    height: 1px;
+    width: 100%;
+  }
 }
 
 #navbar-profile {
@@ -442,6 +461,17 @@ ul.metrics > ul > li {
   padding-top: 1px;
   padding-bottom: 1px;
   margin-bottom: 2px;
+}
+
+.task-metrics-table th:first-child {
+  text-align: left;
+}
+.task-metrics-table th {
+  text-align: right;
+}
+.task-metrics-table td {
+  width: 15%;
+  text-align: right;
 }
 
 /*****************
@@ -643,6 +673,12 @@ div.project-title {
   margin-bottom: 30px;
 }
 
+#browse-map {
+  display: none;
+  padding: 0;
+  margin-left: -15px;
+}
+
 #browse-list {
   padding: 0;
   margin-left: -15px;
@@ -785,14 +821,6 @@ a.delete-project-event {
   padding: 0px 3px;
 }
 
-.project-people {
-  height: 40px;
-  width: 40px;
-  max-height: 40px;
-  border-radius: 25px;
-  vertical-align: baseline;
-}
-
 .project-comments {
   margin-bottom: 20px;
 }
@@ -803,9 +831,39 @@ a.delete-project-event {
   cursor: pointer;
 }
 
+.project-people-div img {
+  height: 40px;
+  width: 40px;
+  max-height: 40px;
+  border-radius: 25px;
+}
+
+.project-people-show-div {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  text-align: center;
+  vertical-align: top;
+  padding: 0px 3px 0px 3px;
+  width: 70px;
+}
+
+.project-people-show-div img {
+  height: 40px;
+  width: 40px;
+  max-height: 40px;
+  border-radius: 25px;
+}
+
+.project-people-show-label {
+  font-size: 11px;
+  color: #606060;
+  font-weight: 300;
+  display: block;
+  max-width: 70px;
+}
+
 .project-people-space {
-  margin-left: 10px;
-  margin-right: 10px;
   position: relative;
   display: inline-block;
 }
@@ -1417,6 +1475,7 @@ ul.task-tags > li {
   font-size: 18px;
   margin-bottom: 10px;
   line-height: 1.5em;
+  word-break: break-all;
 }
 
 .task-edit-description {
@@ -1444,6 +1503,42 @@ ul.task-tags > li {
   font-weight: normal;
 }
 
+#task-form fieldset aside a,
+#task-form fieldset aside a:hover,
+#task-form fieldset aside a:focus {
+  color: #00FFFF;
+  text-decoration: underline;
+}
+#task-form fieldset aside ol,
+#task-form fieldset aside ul {
+  padding-left: 1.5em;
+}
+
+#task-form fieldset h3 {
+  padding-left: 0;
+}
+
+#task-form .tag-row {
+  margin-top: 2em;
+}
+
+#task-form fieldset {
+    margin-top: 2em;
+    margin-bottom: 2em;
+}
+
+#task-form fieldset:first-child {
+  margin-top: 0;
+}
+
+#task-form .buttons {
+  margin-top: 2em;
+  text-align: right;
+}
+
+#task-form .buttons .btn {
+  margin-left: 24px;
+}
 /**********************************
 =  TASKS INFINITE SCROLL OVERFLOW
 ***********************************/
@@ -1516,7 +1611,7 @@ ul.task-tags > li {
 =  TASKS MADLIBS FORM
 ******************/
 #task-form {
-  line-height: 2.1em;
+  line-height: 1.3em;
 }
 
 #task-form #section-1 {
@@ -1525,11 +1620,6 @@ ul.task-tags > li {
 
 #task-form #section-1 p,li {
   margin-top: 0.5em;
-}
-
-#task-form #task-responsibilities-cta {
-  font-size: 125%;
-  margin-left: 6px;
 }
 
 #task-form .select2-container-multi {
@@ -1542,6 +1632,7 @@ ul.task-tags > li {
 
 #task-form .dropdown {
   margin-top: -7px;
+  min-width: 100px;
 }
 
 #task-form input.fullwidth {

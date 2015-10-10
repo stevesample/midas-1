@@ -12,18 +12,6 @@ module.exports = {
       // expire password reset tokens after this many milliseconds
       tokenExpiration  : 60*60*1000
     },
-    linkedin : {
-      clientId    : process.env.LINKEDIN_CLIENT_ID  || 'CLIENT_ID',
-      clientSecret: process.env.LINKEDIN_CLIENT_SECRET || 'CLIENT_SECRET',
-      callbackUrl : process.env.LINKEDIN_CALLBACK_URL || 'http://localhost/api/auth/callback/linkedin',
-      overwrite   : false
-    },
-    myusa : {
-      clientId    : process.env.MYUSA_CLIENT_ID  || 'CLIENT_ID',
-      clientSecret: process.env.MYUSA_CLIENT_SECRET || 'CLIENT_SECRET',
-      callbackUrl : process.env.MYUSA_CALLBACK_URL || 'http://localhost/api/auth/callback/myusa',
-      overwrite   : false
-    },
     sspi : {
       contentUrl  : 'http://localhost:1337/api/main/test',
       emailDomain : 'state.gov',

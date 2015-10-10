@@ -35,7 +35,7 @@ module.exports = {
       return res.send(true);
     }
     // check if a user already has this email
-    userUtils.findUser(req.route.params.id, function (err, user) {
+    User.findOneByUsername(req.route.params.id.toLowerCase(), function (err, user) {
       if (err) { return res.send(400, { message:'Error looking up username.' }); }
       if (!user) { return res.send(false); }
       if (req.user && req.user[0].id == user.id) { return res.send(false); }
@@ -49,9 +49,9 @@ module.exports = {
       reqId = req.user[0].id;
     }
     sails.services.utils.user.getUser(req.route.params.id, reqId, function (err, user) {
+      if (err) { return res.send(400, { message: err }); }
       // prune out any info you don't want to be public here.
       if (reqId !== req.route.params.id) user.username = null;
-      if (err) { return res.send(400, { message: err }); }
       sails.log.debug('User Get:', user);
       res.send(user);
     });
@@ -69,8 +69,9 @@ module.exports = {
     }
     sails.services.utils.user.getUser(userId, reqId, req.user, function (err, user) {
       // this will only be shown to logged in users.
-      if (userId !== reqId) user.username = null;
-      if (err) { return res.send(400, err); }
+      if (err) { return res.send(400, { message: err }); }
+      // non-strict equality test because params are strings
+      if (userId != reqId && !req.user.isAdmin) user.username = null;
       sails.log.debug('User Get:', user);
       res.send(user);
     });
@@ -341,19 +342,31 @@ module.exports = {
         }
       }
 
-      // Encrypt the password
-      bcrypt.hash(password, 10, function(err, hash) {
-        if (err) { return res.send(400, { message: 'Unable to hash password.' }); }
-        var pwObj = {
-          userId: userId,
-          password: hash
-        };
-        // Store the user's password with the bcrypt hash
-        UserPassword.create(pwObj).exec(function (err, pwObj) {
-          if (err) { return res.send(400, { message: 'Unable to store password.'}); }
-          return res.send(true);
+      Passport.findOrCreate({
+        user: user.id,
+        protocol: 'local'
+      }).exec(function(err, passport) {
+        passport.password = password;
+        passport.save(function (err, newPasswordObj) {
+          if (err) return res.send(400, {
+            message: 'Error storing new password.'
+          });
+
+          // Reset login
+          user.passwordAttempts = 0;
+          user.save(function(err, user) {
+            if (err) {
+              return res.send(400, {
+                message: 'Error resetting passwordAttempts',
+                error: err
+              });
+            }
+            // success, return true
+            return res.send(true);
+          });
         });
       });
+
     });
 
   },

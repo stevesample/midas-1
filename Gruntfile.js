@@ -82,7 +82,8 @@ module.exports = function (grunt) {
         ext: '.min.css',
         extDot: 'last',
         options: {
-          report: 'min'
+          report: 'min',
+          sourceMap: process.env.NODE_ENV !== 'production'
         }
       }
     },
@@ -95,7 +96,7 @@ module.exports = function (grunt) {
         {
           expand: true,
           cwd: './assets',
-          src: ['build/**/*', 'js/vendor/**/*', 'images/**/*', 'locales/**/*', 'data/**/*'],
+          src: ['build/**/*', 'js/vendor/**/*', 'images/**/*', 'locales/**/*', 'data/**/*', 'uploads/**/*'],
           dest: '.tmp/public'
         }
         ]
