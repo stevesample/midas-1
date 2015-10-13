@@ -38,6 +38,10 @@ module.exports.routes = {
     controller: 'main',
     action: 'index'
   },
+  '/dashboard': {
+    controller: 'main',
+    action: 'index'
+  },
 
   // These routes are for backbone push state to work
   '/projects': {
@@ -91,6 +95,10 @@ module.exports.routes = {
   '/admin/:unknownRoute': {
     controller: 'main',
     action: 'index'
+  },
+  '/cron': {
+    controller: 'main',
+    action: 'cron'
   },
 
   '/index.html': '/',

@@ -8,7 +8,8 @@ var jqFU = require('blueimp-file-upload/js/jquery.fileupload.js');
 var MarkdownEditor = require('../../../../components/markdown_editor');
 var marked = require('marked');
 var TagShowView = require('../../../tag/show/views/tag_show_view');
-var ProfileTemplate = require('../templates/profile_show_template.html');
+var ProfileShowTemplate = require('../templates/profile_show_template.html');
+var ProfileEditTemplate = require('../templates/profile_edit_template.html');
 var ShareTemplate = require('../templates/profile_share_template.txt');
 var Login = require('../../../../config/login.json');
 var ModalComponent = require('../../../../components/modal');
@@ -17,7 +18,6 @@ var TagFactory = require('../../../../components/tag_factory');
 
 
 var ProfileShowView = Backbone.View.extend({
-
   events: {
     "submit #profile-form"       : "profileSubmit",
     "click #profile-save"        : "profileSave",
@@ -63,7 +63,7 @@ var ProfileShowView = Backbone.View.extend({
       login: Login,
       data: this.model.toJSON(),
       user: window.cache.currentUser || {},
-      edit: this.edit,
+      edit: false,
       saved: this.saved,
       ui: UIConfig
     };
@@ -73,7 +73,8 @@ var ProfileShowView = Backbone.View.extend({
     if (data.data.bio) {
       data.data.bioHtml = marked(data.data.bio);
     }
-    var template = _.template(ProfileTemplate)(data);
+
+    var template = this.edit ? _.template(ProfileEditTemplate)(data) : _.template(ProfileShowTemplate)(data);
     this.$el.html(template);
     this.$el.i18n();
 
@@ -87,6 +88,12 @@ var ProfileShowView = Backbone.View.extend({
     this.initializeTextArea();
     this.updatePhoto();
     this.updateProfileEmail();
+
+    // Force reloading of image (in case it was changed recently)
+    if (data.user.id === data.data.id) {
+      var url = '/api/user/photo/' + data.user.id + "?" + new Date().getTime();
+      $("#project-header").css('background-image', "url('" + url + "')");
+    }
     return this;
   },
 
@@ -155,13 +162,17 @@ var ProfileShowView = Backbone.View.extend({
   },
 
   initializeTags: function() {
+    var showTags = true;
     if (this.tagView) { this.tagView.cleanup(); }
+    if (this.edit) showTags = false;
+
     this.tagView = new TagShowView({
       model: this.model,
       el: '.tag-wrapper',
       target: 'profile',
       targetId: 'userId',
-      edit: this.edit
+      edit: this.edit,
+      showTags: showTags
     });
     this.tagView.render();
   },
@@ -204,15 +215,12 @@ var ProfileShowView = Backbone.View.extend({
     this.model.on("profile:updatedPhoto", function (data) {
       //added timestamp to URL to force FF to reload image from server
       var url = '/api/user/photo/' + data.attributes.id + "?" + new Date().getTime();
-      // force the new image to be loaded
-      $.get(url, function (data) {
-        $("#project-header").css('background-image', "url('" + url + "')");
-        $('#file-upload-progress-container').hide();
-        // notify listeners of the new user image, but only for the current user
-        if (self.model.toJSON().id == window.cache.currentUser.id) {
-          window.cache.userEvents.trigger("user:profile:photo:save", url);
-        }
-      });
+      $("#project-header").css('background-image', "url('" + url + "')");
+      $('#file-upload-progress-container').hide();
+      // notify listeners of the new user image, but only for the current user
+      if (self.model.toJSON().id == window.cache.currentUser.id) {
+        window.cache.userEvents.trigger("user:profile:photo:save", url);
+      }
     });
   },
 
