@@ -12,12 +12,6 @@ module.exports = {
       // expire password reset tokens after this many milliseconds
       tokenExpiration  : 60*60*1000
     },
-    linkedin : {
-      overwrite   : false
-    },
-    myusa : {
-      overwrite   : false
-    },
     sspi : {
       contentUrl  : 'http://localhost:1337/api/main/test',
       emailDomain : 'state.gov',

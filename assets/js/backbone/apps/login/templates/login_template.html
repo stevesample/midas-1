@@ -8,25 +8,8 @@
   </div>
   <% } %>
 
-  <% if (login.oauth.length > 0) { %>
-  <div class="login-oauth">Login with
-  <% _.each(login.oauth, function (e) { %>
-  <div class="row">
-    <div class="col-sm-offset-3 col-sm-6">
-      <div class="login-option">
-        <a href="<%- login.config[e].endpoint %>" class="btn btn-c0 btn-login">
-          <img src="<%- login.config[e].image %>" alt="<%- login.config[e].name %>" class="btn-login-responsive"/>
-        </a>
-      </div>
-    </div>
-  </div>
-  <% }); %>
-  </div>
-  <% } %>
-
   <% if (login.local.enabled === true) { %>
     <% if (login.oauth.length > 0) { %>
-    <hr/>
     <% } %>
     <div class="alert alert-danger" id="login-error" style="display:none;"></div>
       <div class="form-group">
@@ -100,17 +83,6 @@
   </div>
 
     <div id="optional-registration-view">
-      <% if (login.agency.enabled === true) { %>
-        <div class="row">
-          <div class="col-sm-12">
-            <div class="form-group">
-              <label for="ragency" class="control-label" data-i18n="loginModal.agency">Agency</label>
-              <input type="hidden" id="ragency" name="ragency" style="width: 100%" data-validate="empty"/>
-              <span class="help-block error-empty" style="display:none;">Please select a valid agency.</span>
-            </div>
-          </div>
-        </div>
-      <% } %>
 
       <% if (login.location.enabled === true) { %>
         <div class="row">
