@@ -21,7 +21,7 @@ module.exports = {
   //
   // In production, you'll probably want to change this setting
   // to 80 (http://) or 443 (https://) if you have an SSL certificate
-  // port: process.env.PORT || 1337,
+  port: process.env.PORT || 1337,
 
   // The runtime "environment" of your Sails app is either 'development' or 'production'.
   //
