@@ -1,3 +1,7 @@
+var cfenv = require('cfenv'),
+    appEnv = cfenv.getAppEnv(),
+    dbURL = appEnv.getServiceURL('psql-openopps');
+
 console.log('Loading... ', __filename);
 
 /**
@@ -28,7 +32,11 @@ module.exports.connections = {
     inMemory: true
   },
 
-  disk: {
+  test: {
+    adapter: 'sails-disk'
+  },
+
+  local: {
     adapter: 'sails-disk'
   },
 
@@ -41,7 +49,22 @@ module.exports.connections = {
     user        : 'midas',
     password    : 'midas',
     database    : 'midas',
-    softDelete  : true
+    softDelete  : true,
+    populateFast: true
   }
 
 };
+
+if (dbURL) {
+  module.exports.connections = {
+    postgresql: {
+      adapter: 'sails-postgresql',
+      url: dbURL,
+      softDelete: true,
+      populateFast: true
+    }
+  };
+  module.exports.models = {
+    connection: 'postgresql'
+  };
+}

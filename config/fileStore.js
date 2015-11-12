@@ -1,9 +1,22 @@
+var AWS = require('aws-sdk'),
+    cfenv = require('cfenv'),
+    appEnv = cfenv.getAppEnv(),
+    s3Creds = appEnv.getServiceCreds('s3-midas-assets');
+
+// If running in Cloud Foundry with an S3 credential service available
+if (s3Creds) {
+  AWS.config.update({
+    accessKeyId: s3Creds.access_key,
+    secretAccessKey: s3Creds.secret_key
+  });
+}
+
 module.exports.fileStore = {
-  service: 'local',
+  service: process.env.FILESTORE || 'local',
 
   local: {
     dirname: 'assets/uploads'
-  }
+  },
 
   /**
    * Store files on AWS S3
@@ -18,9 +31,9 @@ module.exports.fileStore = {
    * @prefix: prefix string / virtual path within bucket
    */
 
-  // s3: {
-  //   bucket: 'midas-filestore',
-  //   prefix: 'assets/uploads'
-  // }
+  s3: {
+    bucket: process.env.S3_BUCKET || 'midas-filestore',
+    prefix: process.env.S3_PREFIX || 'assets/uploads'
+  }
 
 };

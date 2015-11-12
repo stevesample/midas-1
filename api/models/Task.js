@@ -2,8 +2,8 @@
     :: Task
     -> model
 ---------------------*/
-var noteUtils = require('../services/notifications/manager');
-var exportUtils = require('../services/utils/export');
+var exportUtils = require('../services/utils/export'),
+    moment = require('moment');
 
 module.exports = {
 
@@ -21,6 +21,7 @@ module.exports = {
     title: 'STRING',
     // description of the task
     description: 'STRING',
+    completedBy: 'datetime',
 
     publishedAt: 'datetime',
     assignedAt: 'datetime',
@@ -54,9 +55,13 @@ module.exports = {
     'description': {field: 'description', filter: exportUtils.nullToEmptyString},
     'created_date': {field: 'createdAt', filter: exportUtils.excelDateFormat},
     'published_date': {field: 'publishedAt', filter: exportUtils.excelDateFormat},
-    'assigned_date': {field: 'createdAt', filter: exportUtils.excelDateFormat},
+    'assigned_date': {field: 'assignedAt', filter: exportUtils.excelDateFormat},
     'creator_name': {field: 'creator_name', filter: exportUtils.nullToEmptyString},
-    'signups': 'signups'
+    'signups': 'signups',
+    'task_id': 'id',
+    'task_state': 'state',
+    'agency_name': {field: 'agency_name', filter: exportUtils.nullToEmptyString},
+    'completion_date': {field: 'completedAt', filter: exportUtils.excelDateFormat}
   },
 
   beforeUpdate: function(values, done) {
@@ -71,14 +76,15 @@ module.exports = {
       switch (values.state) {
         case 'open':
           values.publishedAt = new Date();
+          action = 'task.update.opened';
           break;
         case 'assigned':
           values.assignedAt = new Date();
-          action = 'taskAssigned';
+          action = 'task.update.assigned';
           break;
         case 'completed':
           values.completedAt = new Date();
-          //Not implemented: action = 'taskCompleted';
+          action = 'task.update.completed';
           break;
       }
 
@@ -87,24 +93,11 @@ module.exports = {
 
       // Set up notification for updates (needs to happen here instead
       // of afterUpdate so we can compare to see if state changed)
-      var params = {
-        trigger: {
-          callerType: 'Task',
-          callerId: values.id,
-          action: action
-        },
-        data: {
-          audience: {
-            'user': {
-              fields: {
-                taskId: values.id,
-                userId: values.userId
-              }
-            }
-          }
-        }
-      };
-      noteUtils.notifier.notify(params, done);
+      Notification.create({
+        action: action,
+        model: values
+      }, done);
+
     });
   },
 
@@ -113,25 +106,37 @@ module.exports = {
     this.beforeUpdate(values, done);
   },
 
-  afterCreate: function(values, done) {
-    var params = {
-      trigger: {
-        callerType: 'Task',
-        callerId: values.id,
-        action: 'taskCreated'
-      },
-      data: {
-        audience: {
-          'user': {
-            fields: {
-              taskId: values.id,
-              userId: values.userId
-            }
-          }
-        }
-      }
-    };
-    noteUtils.notifier.notify(params, done);
+  afterCreate: function(model, done) {
+    Notification.create({
+      action: 'task.create.thanks',
+      model: model
+    }, done);
+  },
+
+  sendNotifications: function(i) {
+    i = i || 0;
+
+    var now = new Date(new Date().toISOString().split('T')[0]),
+        begin = moment(now).add(i, 'days').toDate(),
+        end = moment(now).add(i+1, 'days').toDate();
+
+    Task.find({
+      completedBy: { '>=': begin, '<': end },
+      state: 'assigned'
+    }).exec(function(err, tasks) {
+      if (err) return sails.log.error(err);
+      var action = i ? 'task.due.soon' : 'task.due.today';
+
+      tasks.forEach(function(task) {
+        var find = { action: action, callerId: task.id },
+            model = { action: action, callerId: task.id, model: task };
+        Notification.findOrCreate(find, model, function(err, notification) {
+          if (err) sails.log.error(err);
+          if (notification) sails.log.verbose('New notification', notification);
+        });
+      });
+
+    });
   }
 
 };

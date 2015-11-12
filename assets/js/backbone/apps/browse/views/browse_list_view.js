@@ -23,7 +23,7 @@ var BrowseListView = Backbone.View.extend({
     this.data = {
       pageSize: pageSize,
       page: 1
-    }
+    };
     $(window).on('scroll',function(e){
       self.scrollCheck(e);
     });
@@ -46,34 +46,35 @@ var BrowseListView = Backbone.View.extend({
   },
 
   render: function () {
+    var start, limit;
 
     //settings for infinite scroll
     if ( UIConfig.browse && UIConfig.browse.useInfiniteScroll ) {
       if ( this.data.page == 1 ){
-        var start = 0;
+        start = 0;
       } else {
-        var start = (this.data.page-1) * this.data.pageSize;
+        start = (this.data.page-1) * this.data.pageSize;
       }
-      var limit    = start + this.data.pageSize;
+      limit = start + this.data.pageSize;
     } else {
       //reset page to 1 and return
       if ( this.data.page > 1 ) {
         this.data.page = 1;
         return this;
       }
-      var limit = this.options.collection.length;
-      var start = 0;
+      limit = this.options.collection.length;
+      start = 0;
     }
 
-    if ( this.options.collection.length == 0 ){
+    if ( this.options.collection.length === 0 ){
       var settings = {
         ui: UIConfig
-      }
+      };
       compiledTemplate = _.template(NoListItem)(settings);
       this.$el.append(compiledTemplate);
     } else {
 
-      for ( i = start; i < limit; i++ ){
+      for (var i = start; i < limit; i++ ){
 
       if ( typeof this.options.collection[i] == 'undefined' ){ break; }
         var item = {
@@ -81,7 +82,7 @@ var BrowseListView = Backbone.View.extend({
           user: window.cache.currentUser,
           tagConfig: TagConfig,
           tagShow: ['location', 'skill', 'topic', 'task-time-estimate', 'task-time-required']
-        }
+        };
         if (this.options.collection[i].tags) {
           item.tags = this.organizeTags(this.options.collection[i].tags);
         } else {

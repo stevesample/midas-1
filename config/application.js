@@ -3,13 +3,13 @@ console.log('Loading... ', __filename);
 module.exports = {
 
   // The name of the system, as should appear in emails and the <html> <title> tag
-  systemName: 'midas',
+  systemName: process.env.SYSTEM_NAME || 'Mayday PAC',
 
   // 'http' or 'https'
-  httpProtocol: 'http',
+  httpProtocol: process.env.PROTOCOL || 'http',
 
   // hostName defines the domain upon which your app will be deployed (e.g. 'localhost:1337', for development)
-  hostName: 'localhost:1337',
+  hostName: process.env.HOST || 'localhost:1337',
 
   // The `port` setting determines which TCP port your app will be deployed on
   // Ports are a transport-layer concept designed to allow many different
@@ -21,7 +21,7 @@ module.exports = {
   //
   // In production, you'll probably want to change this setting
   // to 80 (http://) or 443 (https://) if you have an SSL certificate
-  // port: process.env.PORT || 1337,
+  port: process.env.PORT || 1337,
 
   // The runtime "environment" of your Sails app is either 'development' or 'production'.
   //
@@ -37,6 +37,30 @@ module.exports = {
   // environment: process.env.NODE_ENV || 'development'
 
   // import client configuration
-  ui: require(process.cwd() + '/assets/js/backbone/config/ui.json')
+  ui: require(process.cwd() + '/assets/js/backbone/config/ui.json'),
+
+  // survey to send out after task is complete
+  survey: process.env.SURVEY_LINK,
+
+  // token to validate cron request is internal
+  cron_token : process.env.CRON_TOKEN || 'cron_token',
+
+  // Default task state
+  taskState: process.env.TASK_STATE || 'open',
+  draftAdminOnly: process.env.DRAFT_ADMIN_ONLY || false,
+
+  validateDomains: process.env.VALIDATE_DOMAINS || false,
+  requireAgency:   process.env.REQUIRE_AGENCY || false,
+  requireLocation: process.env.REQUIRE_LOCATION || false
 
 };
+
+if (module.exports.httpProtocol === 'https') {
+  // Use secure sessions
+  module.exports.session =  {
+    proxy: true,
+    cookie: {
+      secure: true
+    }
+  };
+}

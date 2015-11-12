@@ -40,6 +40,7 @@ Comment = Backbone.View.extend({
         // cleanup the topic form
         if (this.topicForm) this.topicForm.empty();
       }
+      this.$('[type="submit"]').prop("disabled", false);
       self.addNewCommentToDom(modelJson, currentTarget);
     });
 
@@ -160,7 +161,7 @@ Comment = Backbone.View.extend({
         $('html,body').animate({scrollTop: inputTarget.offset().top},'slow');
       }
 
-      var replyto          = $(e.currentTarget).data("commentauthor");
+      var replyto = _.escape($(e.currentTarget).data("commentauthor"));
       var authorid         = $(e.currentTarget).data("authorid");
       var replyToCommentId = $(e.currentTarget).data("commentid");
       var quote            = $("#comment-id-"+replyToCommentId).html();

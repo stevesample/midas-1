@@ -1,6 +1,13 @@
 <div class="wrapper-addProject"></div>
 <div class="wrapper-addTask"></div>
 
+<div>
+	<p><strong>Thanks for volunteering with MAYDAY.US!</strong></p>
+	<p>Here’s how this tool works:<br />
+	- <i>"Working Groups"</i> are our ongoing teams that have a particular focus, but chip away at different projects. One example is the MAYDAY.US Research Team.<br />
+	- <i>"Opportunities"</i> are specific events that are occurring where we need people to help, for example a call banking session.</p>
+	<p>You can sign up for existing Groups and Opportunities or create your own!</p>
+</div>
 <div class="row search-row">
   <div class="col-md-3 col-md-push-9 browse-buttons">
     <% if (ui.project.show) { %>
@@ -9,22 +16,12 @@
     <a href="#addTask" class="btn btn-c2 add-opportunity" data-toggle="modal" data-backdrop="static" style="<% if (!user) { %>display: none;<% } %>"><i class="fa fa-plus"></i> <span data-i18n="Task">Opportunity</span></a>
   </div>
   <div class="col-md-9 col-md-pull-3">
-    <form class="form-horizontal" role="form" id="search-form">
-
-      <div class="form-group row">
-        <div class="col-sm-10 col-md-10 col-lg-9 input-search">
-          <input type="hidden" id="search" title="Search" style="width: 100%"/>
-        </div>
-        <div class="col-sm-2 col-md-2 col-lg-3 btn-search">
-          <input type="submit" class="btn btn-c1" title="Search" value="Search"/>
-        </div>
-      </div>
-
-    </form>
+    <input type="text" id="search" title="Search" class="form-control" placeholder="<%- placeholder %>">
   </div>
 </div>
 <div class="row">
 
+  <% if (target === 'tasks') { %>
   <div class="col-md-3 col-md-push-9 box">
     <div class="border-bottom box-pad-lr">
       <h2>Filters</h2>
@@ -34,11 +31,7 @@
       <div class="box-pad-lr" id="stateFilters">
         <% _.each(ui.states, function (t) { %>
           <label class="<% if ( t.value == "draft" ) { %>hidden draft-filter<% } %>">
-            <input type='checkbox' name='state<%- t.label %>' class='stateFilter' value='<%- t.value %>'
-            <% if ( t.value == "open" ) {%>
-              <%- checked="checked" %>
-            <% } %>
-            > <%- t.label %>
+            <input type='checkbox' name='state<%- t.label %>' class='stateFilter' value='<%- t.value %>'> <%- t.label %>
           </label>
         <% }); %>
       </div>
@@ -58,8 +51,11 @@
       </div>
     </div>
   </div>
+  <% } %>
 
-  <div class="col-md-9 col-md-pull-3">
+  <div class="<% (target === 'tasks') ? print('col-md-9 col-md-pull-3') : print('col-md-12') %>">
+    <ul class="box custom-popup" id="browse-map">
+    </ul>
     <div id="browse-search-spinner" class="fullwidth text-center">
       Loading... <i class="fa fa-spinner fa-spin"></i>
     </div>

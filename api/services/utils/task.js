@@ -14,7 +14,7 @@ var authorized = function (id, userId, user, cb) {
     user = undefined;
   }
   Task.findOneById(id).populate('tags').exec(function (err, task) {
-    if (err) { return cb('Error finding task.', null); }
+    if (err || !task) { return cb('Error finding task.', null); }
     task.isOwner = false;
     // otherwise, check that we have an owner
     if (userId && (userId == task.userId)) {
@@ -45,6 +45,7 @@ var authorized = function (id, userId, user, cb) {
 };
 
 var getMetadata = function(task, user, cb) {
+  if (!task) return cb();
   task.like = false;
   task.volunteer = false;
   // get owner information
@@ -119,7 +120,7 @@ var findTasks = function (where, cb) {
           var user = _.findWhere(users, { id: task.userId }) || {};
           task.user = {
             name: user.name,
-            agency: user.tags[0]
+            agency: user.tags && user.tags[0]
           };
         });
         return cb(null, tasks);

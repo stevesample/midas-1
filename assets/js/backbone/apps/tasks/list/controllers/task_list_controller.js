@@ -5,7 +5,7 @@ var Utilities = require('../../../../mixins/utilities');
 var Bootstrap = require('bootstrap');
 var TasksCollection = require('../../../../entities/tasks/tasks_collection');
 var TaskCollectionView = require('../views/task_collection_view');
-var TaskFormView = require('../../new/views/task_form_view');
+// var TaskFormView = require('../../new/views/task_form_view');
 var ModalWizardComponent = require('../../../../components/modal_wizard');
 var TaskModel = require('../../../../entities/tasks/task_model');
 
@@ -82,34 +82,7 @@ TaskList = Backbone.View.extend({
   },
 
   add: function (e) {
-    if (e.preventDefault) e.preventDefault();
-    var self = this;
-
-    if (this.taskFormView) this.taskFormView.cleanup();
-    if (this.modalWizardComponent) this.modalWizardComponent.cleanup();
-    this.modalWizardComponent = new ModalWizardComponent({
-      el: ".wrapper-addTask",
-      id: "addTask",
-      modalTitle: 'New Opportunity',
-      model: self.taskModel,
-      collection: self.tasks,
-      modelName: 'task',
-      data: function (parent) { return {
-        title: parent.$("#task-title").val(),
-        description: parent.$("#task-description").val(),
-        projectId: self.options.projectId
-      } }
-    }).render();
-
-    this.taskFormView = new TaskFormView({
-      el: ".modal-body",
-      projectId: this.options.projectId,
-      model: self.taskModel,
-      tasks: self.tasks
-    }).render();
-    this.modalWizardComponent.setChildView(this.taskFormView);
-    this.modalWizardComponent.setNext(this.taskFormView.childNext);
-    this.modalWizardComponent.setSubmit(this.taskFormView.childNext);
+    Backbone.history.navigate('/tasks/new', { trigger: true });
   },
 
   show: function (e) {

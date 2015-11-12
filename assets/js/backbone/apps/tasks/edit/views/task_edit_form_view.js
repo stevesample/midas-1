@@ -6,7 +6,6 @@ var async = require('async');
 var marked = require('marked');
 var MarkdownEditor = require('../../../../components/markdown_editor');
 var TaskEditFormTemplate = require('../templates/task_edit_form_template.html');
-var VolunteerEditFormTemplate = require('../templates/volunteer_edit_form_template.html');
 var TagFactory = require('../../../../components/tag_factory');
 
 
@@ -14,11 +13,15 @@ var TaskEditFormView = Backbone.View.extend({
 
   events: {
     'blur .validate'         : 'v',
+    'click #change-owner'    : 'displayChangeOwner',
+    'click #add-participant' : 'displayAddParticipant',
     'click #task-view'       : 'view',
     'submit #task-edit-form' : 'submit'
   },
 
   initialize: function (options) {
+    _.extend(this, Backbone.Events);
+
     this.options = options;
     this.tagFactory = new TagFactory();
     this.data = {};
@@ -40,7 +43,7 @@ var TaskEditFormView = Backbone.View.extend({
   },
 
   render: function () {
-    var compiledTemplate, volunteerTemplate;
+    var compiledTemplate;
 
     this.data = {
       data: this.model.toJSON(),
@@ -51,11 +54,6 @@ var TaskEditFormView = Backbone.View.extend({
       madlibTags: this.options.madlibTags,
       ui: UIConfig
     };
-
-    volunteerTemplate = _.template(VolunteerEditFormTemplate)(this.data);
-    //$(this.options.elVolunteer).remove();
-    $(this.options.elVolunteer).html(volunteerTemplate);
-    $(this.options.elVolunteer).i18n();
 
     compiledTemplate = _.template(TaskEditFormTemplate)(this.data);
     this.$el.html(compiledTemplate);
@@ -69,12 +67,18 @@ var TaskEditFormView = Backbone.View.extend({
     $('#publishedAt').datetimepicker({
       defaultDate: this.data.data.publishedAt
     });
-    $('#assignedAt').datetimepicker({
-      defaultDate: this.data.data.assignedAt
-    });
-    $('#completedAt').datetimepicker({
-      defaultDate: this.data.data.completedAt
-    });
+
+    if (this.data.data.assignedAt) {
+      $('#assignedAt').datetimepicker({
+        defaultDate: this.data.data.assignedAt
+      });
+    }
+
+    if (this.data.data.completedAt) {
+      $('#completedAt').datetimepicker({
+        defaultDate: this.data.data.completedAt
+      });
+    }
 
   },
 
@@ -82,36 +86,13 @@ var TaskEditFormView = Backbone.View.extend({
 
     var formatResult = function (object, container, query) {
       var formatted = '<div class="select2-result-title">';
-      formatted += object.name || object.title;
+      formatted += _.escape(object.name || object.title);
       formatted += '</div>';
       if (!_.isUndefined(object.description)) {
         formatted += '<div class="select2-result-description">' + marked(object.description) + '</div>';
       }
       return formatted;
     };
-
-    this.$("#projectId").select2({
-      placeholder: "Select a project to associate",
-      multiple: false,
-      formatResult: formatResult,
-      formatSelection: formatResult,
-      allowClear: true,
-      ajax: {
-        url: '/api/ac/project',
-        dataType: 'json',
-        data: function (term) {
-          return {
-            q: term
-          };
-        },
-        results: function (data) {
-          return { results: data };
-        }
-      }
-    });
-    if (this.data.data.project) {
-      this.$("#projectId").select2('data', this.data.data.project);
-    }
 
     this.$("#owner").select2({
       placeholder: "task owner",
@@ -136,24 +117,40 @@ var TaskEditFormView = Backbone.View.extend({
       this.$("#owner").select2('data', this.data.data.owner);
     }
 
-    this.tagFactory.createTagDropDown({
-      type:"skill",selector:"#task_tag_skills",width: "100%", tokenSeparators: [","]
+    this.$("#participant").select2({
+      placeholder: "Add participant",
+      multiple: false,
+      formatResult: formatResult,
+      formatSelection: formatResult,
+      allowClear: false,
+      ajax: {
+        url: '/api/ac/user',
+        dataType: 'json',
+        data: function (term) {
+          return {
+            q: term
+          };
+        },
+        results: function (data) {
+          return { results: data };
+        }
+      }
     });
-    if (this.data['madlibTags'].skill) {
-      this.$("#task_tag_skills").select2('data', this.data['madlibTags'].skill);
-    }
 
     this.tagFactory.createTagDropDown({
-      type:"topic", selector: "#task_tag_topics", width: "100%", tokenSeparators: [","]
+      type: "skill",
+      selector: "#task_tag_skills",
+      width: "100%",
+      tokenSeparators: [","],
+      data: this.data['madlibTags'].skill
     });
-    if (this.data['madlibTags'].topic) {
-      this.$("#task_tag_topics").select2('data', this.data['madlibTags'].topic);
-    }
 
-    this.tagFactory.createTagDropDown({type:"location",selector:"#task_tag_location",width: "100%"});
-    if (this.data['madlibTags'].location) {
-      this.$("#task_tag_location").select2('data', this.data['madlibTags'].location);
-    }
+    this.tagFactory.createTagDropDown({
+      type: "location",
+      selector: "#task_tag_location",
+      width: "40%",
+      data: this.data['madlibTags'].location
+    });
 
     $("#skills-required").select2({
       placeholder: "required/not-required",
@@ -204,30 +201,44 @@ var TaskEditFormView = Backbone.View.extend({
     var self = this;
 
     self.on("task:tags:save:done", function (){
+      var owner       = this.$("#owner").select2('data'),
+          completedBy = this.$('#estimated-completion-date').val(),
+          newParticipant = this.$('#participant').select2('data'),
+          silent = true;
 
       var modelData = {
         title: this.$("#task-title").val(),
         description: this.$("#task-description").val(),
         publishedAt: this.$("#publishedAt").val() || undefined,
         assignedAt: this.$("#assignedAt").val() || undefined,
-        completedAt: this.$("#completedAt").val() || undefined
+        completedAt: this.$("#completedAt").val() || undefined,
+        projectId: null
       };
 
-      var project = this.$("#projectId").select2('data');
-      if (project) {
-        modelData.projectId = project.id;
-      } else {
-        modelData.projectId = null;
-      }
-
-      var owner = this.$("#owner").select2('data');
-      if (owner) {
-        modelData.userId = owner.id;
+      if (owner) modelData['userId'] = owner.id;
+      if (completedBy != '') modelData['completedBy'] = completedBy;
+      if (newParticipant) {
+        if (this.$('#participant-notify:checked').length > 0) silent = false;
+        $.ajax({
+          url: '/api/volunteer',
+          method: 'POST',
+          data: {
+            taskId: self.model.get('id'),
+            userId: newParticipant.id,
+            silent: silent
+          },
+          success: function (e) {
+            console.log('success adding participant', e);
+          },
+          error: function (e) {
+            console.log('error adding participant', e);
+          }
+        });
       }
 
       var tags = _(this.getTagsFromPage()).chain()
             .map(function(tag) {
-              if (!tag) return;
+              if (!tag || !tag.id) return;
               return (tag.id && tag.id !== tag.name) ? +tag.id : {
                 name: tag.name,
                 type: tag.tagType,
@@ -236,6 +247,7 @@ var TaskEditFormView = Backbone.View.extend({
             })
             .compact()
             .value();
+
       modelData.tags = tags;
 
       self.options.model.trigger("task:update", modelData);
@@ -245,13 +257,10 @@ var TaskEditFormView = Backbone.View.extend({
   submit: function (e) {
     var self = this;
     if (e.preventDefault) e.preventDefault();
-    //var self = this;
 
     var tags = [];
     var oldTags = [];
     var diff = [];
-
-    _.extend(this, Backbone.Events);
 
     // check all of the field validation before submitting
     var children = this.$el.find('.validate');
@@ -266,14 +275,36 @@ var TaskEditFormView = Backbone.View.extend({
     return self.trigger("task:tags:save:done");
   },
 
+  displayChangeOwner: function (e) {
+    e.preventDefault();
+    this.$('.project-owner').hide();
+    this.$('.change-project-owner').show();
+
+    return this;
+  },
+  displayAddParticipant: function (e) {
+    e.preventDefault();
+    this.$('.project-no-people').hide();
+    this.$('.add-participant').show();
+
+    return this;
+  },
+
   getTagsFromPage: function () {
 
     // Gather tags for submission after the task is created
-    var tags = [];
-    tags.push.apply(tags,this.$("#task_tag_topics").select2('data'));
+    var tags = [],
+        taskTimeTag = this.$("[name=task-time-required]:checked").val();
+
+    if (taskTimeTag) {
+        tags.push.apply(tags,[{
+          id: parseInt(taskTimeTag),
+          type: 'task-time-required'
+        }]);
+    }
+
     tags.push.apply(tags,this.$("#task_tag_skills").select2('data'));
     tags.push.apply(tags,this.$("#task_tag_location").select2('data'));
-    tags.push.apply(tags,[this.$("#skills-required").select2('data')]);
     tags.push.apply(tags,[this.$("#people").select2('data')]);
     tags.push.apply(tags,[this.$("#time-required").select2('data')]);
     tags.push.apply(tags,[this.$("#time-estimate").select2('data')]);

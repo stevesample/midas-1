@@ -38,7 +38,7 @@ function copyFile(source, target, cb) {
     }
   }
 }
-copyFile('./test/data/disk.db', './.tmp/disk.db', start);
+copyFile('./test/data/disk.db', './.tmp/test.db', start);
 
 function start(err) {
   if (err) return console.log('error: ', err);
@@ -52,7 +52,11 @@ function start(err) {
     },
     hooks: {
       grunt: false
-    }
+    },
+    validateDomains: false,
+    emailProtocol: '',
+    taskState: 'open',
+    draftAdminOnly: false
   };
 
   // Lift Sails and store the app reference

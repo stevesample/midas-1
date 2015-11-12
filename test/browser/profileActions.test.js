@@ -5,6 +5,8 @@ var assert = chai.assert;
 var casper_chai = require('casper-chai');
 chai.use(casper_chai);
 
+var buildSettings = require('../../assets/js/backbone/config/login.json');
+
 // access environment vars
 var system = require('system');
 
@@ -44,12 +46,34 @@ describe('Profile actions', function() {
 
     // Fill out the registration form
     casper.then(function() {
-      casper.fillSelectors('#registration-form', {
+      var registration = {
         '#rname': config.user.name,
         '#rusername': config.user.username,
         '#rpassword': config.user.password,
         '#rpassword-confirm': config.user.password
-      }, false);
+      };
+      casper.fillSelectors('#registration-form', registration, false);
+
+      // If the build settings enable agency or location include thos
+      if (buildSettings.agency.enabled) {
+        casper.evaluate(function(agencyId) {
+          $('#ragency').select2('data', {
+            id: agencyId,
+            type: 'agency',
+            target: 'tagentity'
+          });
+        }, config.user.agency);
+      }
+      if (buildSettings.location.enabled) {
+        casper.evaluate(function(locationId) {
+          $('#rlocation').select2('data', {
+            id: locationId,
+            type: 'location',
+            target: 'tagentity'
+          });
+        }, config.user.location);
+      }
+
       casper.waitForSelector(submitButton);
     });
 
@@ -73,7 +97,7 @@ describe('Profile actions', function() {
 
     // Click view profile
     casper.then(function() {
-      casper.click('.nav-link[href="/profile"]');
+      casper.click('.nav-link[id="profileLink"]');
       casper.waitForSelector('.link-backbone');
     });
 
@@ -89,7 +113,7 @@ describe('Profile actions', function() {
         '#title': config.user.title,
         '#bio': config.user.bio
       }, false);
-      casper.click('#submit');
+      casper.click('#profile-save');
       casper.waitForSelector('.profile-jobtitle');
     });
 
@@ -171,7 +195,7 @@ describe('Profile actions', function() {
   });
 
   it('should log in from task page', function() {
-    var submitButton = '#login-password-form button[type="submit"]';
+      var submitButton = '#login-password-form button[type="submit"]';
 
     // Click task title
     casper.then(function() {
@@ -187,41 +211,51 @@ describe('Profile actions', function() {
 
     // Fill out the login form
     casper.then(function() {
-      casper.fillSelectors('#login-password-form', {
+      casper.capture('ss/c.png');
+      var fields = {
         '#username': config.user.username,
         '#password': config.user.password
-      }, false);
+      };
+      casper.fillSelectors('#login-password-form', fields, false);
       casper.waitForSelector(submitButton);
     });
 
     // Click the "sign in" button
     casper.then(function() {
       casper.click(submitButton);
-      casper.waitForSelector('#submit');
     });
 
   });
 
   it('should volunteer after logging in', function() {
 
+    // Click participate again
+    casper.then(function() {
+      casper.click('#volunteer');
+      casper.waitUntilVisible('#submit');
+    });
+
     // Click "I agree" to volunteer
     casper.then(function() {
       casper.click('#submit');
+      var user = casper.evaluate(function() {
+        return window.cache.currentUser;
+      });
       casper.waitUntilVisible('.volunteer-true');
     });
 
     // Get the task data from the API and confirm volunteer is set
     casper.then(function() {
       var user = casper.evaluate(function() {
-            return window.cache.currentUser.id;
-          }),
-          task = casper.getCurrentUrl().split('/').pop(),
-          data = casper.evaluate(function(url, userId) {
-            return JSON.parse(__utils__.sendAJAX(url, 'GET', null, false));
-          }, {
-            url: system.env.TEST_ROOT + '/api/task/' + task,
-            userId: user
-          });
+        return window.cache.currentUser.id;
+      }),
+      task = casper.getCurrentUrl().split('/').pop(),
+      data = casper.evaluate(function(url, userId) {
+        return JSON.parse(__utils__.sendAJAX(url, 'GET', null, false));
+      }, {
+        url: system.env.TEST_ROOT + '/api/task/' + task,
+        userId: user
+      });
       assert(data.volunteers[0].userId, user);
     });
 

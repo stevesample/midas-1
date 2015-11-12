@@ -53,10 +53,11 @@
                 <li>
                   <a href="/tasks/<%- task.id %>"><%- task.title %></a>,
                   <a href="/profile/<%- task.user.id %>"><%- task.user.name || task.user.username %></a>
+                  <a href="#delete/<%- task.id %>" data-task-id="<%- task.id %>" data-task-title="<%- task.title %>" class="delete-task"><span class='fa fa-times'></span></a>
                   <% if (task.volunteers.length) { %>
                   <p>Sign-ups:
                     <% _(task.volunteers).forEach(function(vol) { %>
-                    <a href="/profile/<%- task.user.id %>"><%- vol.user.name || vol.user.username %></a>
+                    <a href="/profile/<%- vol.user.id %>"><%- vol.user.name || vol.user.username %></a>
                     <% }); %>
                   </p>
                   <% } %>
@@ -73,7 +74,7 @@
                   <% if (task.volunteers.length) { %>
                   <p>Sign-ups:
                     <% _(task.volunteers).forEach(function(vol) { %>
-                    <a href="/profile/<%- task.user.id %>"><%- vol.user.name || vol.user.username %></a>
+                    <a href="/profile/<%- vol.user.id %>"><%- vol.user.name || vol.user.username %></a>
                     <% }); %>
                   </p>
                   <% } %>
@@ -90,7 +91,7 @@
                   <% if (task.volunteers.length) { %>
                   <p>Sign-ups:
                     <% _(task.volunteers).forEach(function(vol) { %>
-                    <a href="/profile/<%- task.user.id %>"><%- vol.user.name || vol.user.username %></a>
+                    <a href="/profile/<%- vol.user.id %>"><%- vol.user.name || vol.user.username %></a>
                     <% }); %>
                   </p>
                   <% } %>
@@ -107,7 +108,7 @@
                   <% if (task.volunteers.length) { %>
                   <p>Sign-ups:
                     <% _(task.volunteers).forEach(function(vol) { %>
-                    <a href="/profile/<%- task.user.id %>"><%- vol.user.name || vol.user.username %></a>
+                    <a href="/profile/<%- vol.user.id %>"><%- vol.user.name || vol.user.username %></a>
                     <% }); %>
                   </p>
                   <% } %>
@@ -124,7 +125,7 @@
                   <% if (task.volunteers.length) { %>
                   <p>Sign-ups:
                     <% _(task.volunteers).forEach(function(vol) { %>
-                    <a href="/profile/<%- task.user.id %>"><%- vol.user.name || vol.user.username %></a>
+                    <a href="/profile/<%- vol.user.id %>"><%- vol.user.name || vol.user.username %></a>
                     <% }); %>
                   </p>
                   <% } %>

@@ -6,6 +6,8 @@ var UIConfig = require('../../../config/ui.json');
 var Popovers = require('../../../mixins/popovers');
 var TagConfig = require('../../../config/tag');
 var BrowseListView = require('./browse_list_view');
+var ProfileListView = require('./profile_list_view');
+var ProfileMapView = require('./profile_map_view');
 var BrowseMainTemplate = require('../templates/browse_main_view_template.html');
 var BrowseSearchTag = require('../templates/browse_search_tag.html');
 
@@ -15,293 +17,164 @@ var popovers = new Popovers();
 var BrowseMainView = Backbone.View.extend({
 
   events: {
-    "submit #search-form"             : "search",
-    "click .search-tag-remove"        : "searchTagRemove",
-    "click .search-clear"             : "searchClear",
-    "change .stateFilter"             : "searchTagRemove",
+    "keyup #search" : 'search',
+    "change #stateFilters input" : 'stateFilter',
     "mouseenter .project-people-div"  : popovers.popoverPeopleOn,
     "click      .project-people-div"  : popovers.popoverClick,
-    "keyup .select2-container"        : "submitOnEnter"
   },
 
   initialize: function (options) {
     this.options = options;
+    this.term = options.queryParams.search;
+    this.filters = options.queryParams.filters ?
+      JSON.parse(options.queryParams.filters) :
+      options.target === 'profiles' ? {} : { state: 'open' };
+    window.foo = this;
   },
 
   render: function () {
-    var options = {
-      target: this.options.target,
-      user: window.cache.currentUser,
-      ui: UIConfig
-    };
-    this.compiledTemplate = _.template(BrowseMainTemplate)(options)
-    this.$el.html(this.compiledTemplate);
+    var target = this.options.target,
+      options = {
+        target: target,
+        user: window.cache.currentUser,
+        ui: UIConfig,
+        placeholder: target === 'tasks' ?
+          "I'm looking for opportunities by name, agency, skill, topic, description..." :
+          target === 'projects' ?
+          "I'm looking for working groups by name, agency, skill, topic, description..." :
+          target === 'profiles' ?
+          "I'm looking for people by name, title, agency, location..." :
+          "I'm looking for..."
+      };
+    this.rendered = _.template(BrowseMainTemplate)(options);
+    this.$el.html(this.rendered);
     this.$el.i18n();
 
-    this.initializeSearch();
+    $('#search').val(this.term);
+
+    _.each(_.isArray(this.filters.state) ?
+      this.filters.state : [this.filters.state],
+    function(state) {
+      $('#stateFilters [value="' + state + '"]').prop('checked', true);
+    });
 
     // Allow chaining.
     return this;
   },
 
-  format: function (self, object, container, query) {
-    var formatIcon = "";
-    var name = object.name || object.title;
-    var icon = this.tagIcon[object.type];
-    if (object.target == 'project') {
-      icon = 'fa fa-folder-o';
-    } else if (object.target == 'task') {
-      icon = 'fa fa-tag';
-    }
-
-    if ( !object.unmatched ) {
-      //unmatched name is escaped in createSearchChoice func to preserve html formatting
-      name = _.escape(name);
-      formatIcon = '<i class="' + _.escape(icon) + '"></i>';
-    }
-
-    return  formatIcon+'<span class="box-icon-text">' + name + '</span>';
+  search: function(event) {
+    var $target = this.$(event.currentTarget);
+    this.filter($target.val());
   },
 
-  initializeSearch: function() {
-    var self = this;
-    this.searchTerms = [];
-    this.tags = [];
+  stateFilter: function(event) {
+    var states = _($('#stateFilters input:checked')).pluck('value');
+    this.filter(undefined, { state: states });
+  },
 
-    // figure out which tags apply
-    for (var i = 0; i < TagConfig[this.options.target].length; i++) {
-      this.tags.push(TagConfig.tags[TagConfig[this.options.target][i]]);
-    }
+  filter: function(term, filters) {
+    var items;
 
-    // extract tag icons and classes
-    this.tagIcon = {};
-    this.tagClass = {};
-    for (var i = 0; i < this.tags.length; i++) {
-      this.tagIcon[this.tags[i].type] = this.tags[i].icon;
-      this.tagClass[this.tags[i].type] = this.tags[i]['class'];
-    }
+    if (typeof term !== 'undefined') this.term = term;
+    if (typeof filters !== 'undefined') this.filters = filters;
+    term = this.term;
+    filters = this.filters;
 
-    var formatResult = function (object, container, query) {
-      return self.format(self, object, container, query);
-    };
+    items = this.collection.chain().pluck('attributes').filter(function(item) {
+      // filter out tasks that are full time details with other agencies
+      var userAgency = { id: false },
+          timeRequiredTag = _.where(item.tags, { type: 'task-time-required'})[0];
+          fullTimeTag     = false;
 
-    // Initialize Select2
-    $("#search").select2({
-      placeholder: 'I\'m looking for...',
-      multiple: true,
-      formatResult: formatResult,
-      formatSelection: function(object,container,query) {
-          //null object.target to remove the task / project icons that get readded when terms go
-          //     to the search box on the right
-          object.target = null;
-          object.type   = object.name || object.title;
-          object.id     = object.name || object.title;
-          object.value  = object.name || object.title;
-          object.unmatched = true;
-          return object.name || object.title;
-      },
-      createSearchChoice: function (term) {
-          return { unmatched: true,id: term, value: term, name: "<b>"+_.escape(term)+"</b> <i>click to text search for this value.</i>" };
-      },
-      ajax: {
-        url: '/api/ac/search/' + self.options.target,
-        dataType: 'json',
-        data: function (term) {
-          return {
-            type: TagConfig[self.options.target].join(),
-            q: term
-          };
-        },
-        results: function (data) {
-          return { results: data };
-        }
+      if (window.cache.currentUser) {
+        userAgency = _.where(window.cache.currentUser.tags, { type: 'agency' })[0];
       }
-    }).on("select2-selecting", function (e){
-        if ( e.choice.hasOwnProperty("unmatched") && e.choice.unmatched ){
-          //remove the hint before adding it to the list
-          e.choice.name = e.val;
+
+      if (timeRequiredTag && timeRequiredTag.name === 'Full Time Detail') {
+        fullTimeTag = true;
+      }
+
+      if (!fullTimeTag) return item;
+      if (fullTimeTag && userAgency && (timeRequiredTag.data.agency.id === userAgency.id)) return item;
+    }).filter(function(data) {
+      var searchBody = JSON.stringify(_.values(data)).toLowerCase();
+      return !term || searchBody.indexOf(term.toLowerCase()) >= 0;
+    }).filter(function(data) {
+      var test = [];
+      _.each(filters, function(value, key) {
+        if (_.isArray(value)) {
+          test.push(_.some(value, function(val) {
+            return data[key] === val || _.contains(data[key], value);
+          }));
+        } else {
+          test.push(data[key] === value || _.contains(data[key], value));
         }
       });
+      return test.length === _.compact(test).length;
+    }).value();
+
+    this.renderList(items);
+    if (this.options.target === 'profiles') this.renderMap(items);
   },
 
-  submitOnEnter: function (e) {
-    if(e.keyCode === 13) {
-      this.search(e);
-    }
-  },
 
-  search: function (e) {
-    var self = this;
-    if (e.preventDefault) e.preventDefault();
-    // get values from select2
-    var data = $("#search").select2("data");
-    if (data.length > 0) {
-      $("#search-none").hide();
-      $(".search-clear").show();
-    }
-    _.each(data, function (d) {
-      var found = false;
-      // check if this search term already is chosen
-      for (var i in self.searchTerms) {
-        if (self.searchTerms[i].id == d.id) {
-          if (self.searchTerms[i].title && (self.searchTerms[i].title == d.title)) {
-            found = true;
-          }
-          else if (self.searchTerms[i].name && (self.searchTerms[i].name == d.name)) {
-            found = true;
-          }
-        }
-      }
-      // return if the search term is found
-      if (found) return;
-      // add it to our list of search terms
-      self.searchTerms.push(d);
-      // render the search term in the list
-      var templData = {
-        data: d,
-        format: self.format(self, d)
-      };
-      var templ = _.template(BrowseSearchTag)(templData);
-      if (d.target == 'tagentity') {
-        $("#search-tags").append(templ);
-      } else {
-        $("#search-projs").append(templ);
-      }
-    });
-    $("#search").select2("data","");
-    self.searchExec(self.searchTerms);
+  searchMap: function (loc) {
+    loc = !loc ? '' : loc === this.term ? '' : loc;
+    $('#search').val(loc);
+    this.filter(loc);
   },
 
   renderList: function (collection) {
+
     // create a new view for the returned data
     if (this.browseListView) { this.browseListView.cleanup(); }
 
-    var filteredCollection = this.applyStateFilters(collection);
-
-    this.browseListView = new BrowseListView({
-      el: '#browse-list',
-      target: this.options.target,
-      collection: filteredCollection,
-    });
-    // Show draft filter
-    var draft = _(collection).chain()
+    if (this.options.target == 'projects' || this.options.target == 'tasks') {
+      // projects and tasks get tiles
+      $("#browse-map").hide();
+      this.browseListView = new BrowseListView({
+        el: '#browse-list',
+        target: this.options.target,
+        collection: collection
+      });
+      // Show draft filter
+      var draft = _(collection).chain()
           .pluck('state')
           .indexOf('draft').value() >= 0;
-    $(".draft-filter").toggleClass('hidden', !draft);
+      $(".draft-filter").toggleClass('hidden', !draft);
+
+    } else {
+      // profiles are in a table
+      this.browseListView = new ProfileListView({
+        el: '#browse-list',
+        target: this.options.target,
+        collection: collection
+      });
+    }
     $("#browse-search-spinner").hide();
     $("#browse-list").show();
     this.browseListView.render();
+
     popovers.popoverPeopleInit(".project-people-div");
   },
 
-  searchExec: function (terms) {
-    var self = this;
-
-    if (!terms || (terms.length == 0)) {
-      // re-render the collection
-      self.renderList(this.options.collection.toJSON());
-      return;
-    }
-
-    // create a search object
-    var data = {
-      items: [],
-      tags: [],
-      freeText: [],
-      target: self.options.target
-    };
-    _.each(terms, function (t) {
-      if ( t.unmatched ) {
-        data.freeText.push(t.value);
-      } else {
-        data.items.push(t.id);
-      }
+  renderMap: function (profiles) {
+    // create a new view for the returned data. Need to show the div before
+    // rendering otherwise the SVG borders will be wrong.
+    if (this.browseMapView) { this.browseMapView.cleanup(); }
+    $("#browse-map").show();
+    this.browseMapView = new ProfileMapView({
+      el: '#browse-map',
+      people: profiles
     });
-    $.ajax({
-      url: '/api/search',
-      type: 'POST',
-      data: JSON.stringify(data),
-      dataType: 'json',
-      contentType: 'application/json'
-    }).done(function (data) {
-      // render the search results
-      self.renderList(data);
-    });
-  },
-
-  applyStateFilters: function (data) {
-
-    if ( !_.isObject(data) || !$("#stateFilters").length ){ return data; }
-    var keepers = [];
-    //get check stateFilter inputs
-    var inputs = $(".stateFilter:checked");
-
-    _.each(data,function(item){
-      _.each(inputs,function(test){
-         if ( item.state == test.value ){
-           keepers.push(item);
-         }
-      });
-    });
-
-    return keepers;
-  },
-
-  searchTagRemove: function (e) {
-    if (e.preventDefault) e.preventDefault();
-
-    var self = this;
-
-    if ( $(e.currentTarget).hasClass("stateFilter") ){
-      if ( $("#search-tags").length > 0 ) {
-        var parent = $("#search-tags");
-        var id = "search-tags";
-        var project = false;
-      }
-    } else {
-      var parent = $(e.currentTarget).parents('li')[0];
-      var id = $(parent).data('id');
-      var type = $($(e.currentTarget).parents('ul')[0]).attr('id');
-      var project = false;
-
-      if (type == 'search-projs') {
-        project = true;
-      }
-    }
-
-    for (i in self.searchTerms) {
-      if (self.searchTerms[i].id == id) {
-        if (project && self.searchTerms[i].title) {
-          self.searchTerms.splice(i, 1);
-          break;
-        } else if (self.searchTerms[i].name) {
-          self.searchTerms.splice(i, 1);
-          break;
-        }
-      }
-    }
-
-    if ( !$(e.currentTarget).hasClass("stateFilter") ){
-      parent.remove();
-    }
-    if (self.searchTerms.length == 0) {
-      $("#search-none").show();
-      $(".search-clear").hide();
-    }
-    self.searchExec(self.searchTerms);
-  },
-
-  searchClear: function (e) {
-    if (e.preventDefault) e.preventDefault();
-    this.searchTerms = [];
-    $("#search-projs").children().remove();
-    $("#search-tags").children().remove();
-    $("#search-none").show();
-    $(".search-clear").hide();
-    this.searchExec(self.searchTerms);
+    this.browseMapView.render();
+    // set up listeners for events from the map view
+    this.listenTo(this.browseMapView, "browseSearchLocation", this.searchMap);
+    this.listenTo(this.browseMapView, "browseRemove", this.searchRemove);
   },
 
   cleanup: function() {
+    if (this.browseMapView) { this.browseMapView.cleanup(); }
     if (this.browseListView) { this.browseListView.cleanup(); }
     removeView(this);
   }

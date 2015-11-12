@@ -66,6 +66,7 @@ module.exports = function (grunt) {
             'node_modules/timepicker/jquery.timepicker.css',
             'node_modules/blueimp-file-upload/css/jquery.fileupload.css',
             'node_modules/Select2/select2.css',
+            'node_modules/leaflet/dist/leaflet.css',
             'assets/styles/application.css',
             'assets/styles/theme.css'
           ]
@@ -82,7 +83,8 @@ module.exports = function (grunt) {
         ext: '.min.css',
         extDot: 'last',
         options: {
-          report: 'min'
+          report: 'min',
+          sourceMap: process.env.NODE_ENV !== 'production'
         }
       }
     },
@@ -95,7 +97,7 @@ module.exports = function (grunt) {
         {
           expand: true,
           cwd: './assets',
-          src: ['build/**/*', 'js/vendor/**/*', 'images/**/*', 'locales/**/*', 'data/**/*'],
+          src: ['build/**/*', 'js/vendor/**/*', 'images/**/*', 'locales/**/*', 'data/**/*', 'uploads/**/*'],
           dest: '.tmp/public'
         }
         ]

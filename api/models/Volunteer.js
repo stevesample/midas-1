@@ -5,8 +5,6 @@
  * @description :: Stores volunteer information for tasks
  *
  */
-var noteUtils = require('../services/notifications/manager');
-
 module.exports = {
 
   attributes: {
@@ -14,64 +12,27 @@ module.exports = {
     // The task which a user volunteers for
     taskId: 'INTEGER',
     // the user that is volunteering
-    userId: 'INTEGER'
+    userId: 'INTEGER',
+    // send notification or not, after create
+    silent: 'BOOLEAN'
 
   },
 
   // create notification after creating a volunteer
-  afterCreate: function (values, cb){
-    var params = {
-      trigger: {
-        callerType: 'Task',
-        callerId: values.taskId,
-        action: 'taskVolunteerAdded'
-      },
-      data: {
-        audience: {
-          'taskVolunteer': {
-            fields: {
-                taskId: values.taskId,
-                volunteerId: values.userId
-            }
-          },
-          'volunteerSupervisor': {
-            fields: {
-              taskId: values.taskId,
-              volunteerId: values.userId
-            }
-          }
-        }
-      }
-    };
-
-    noteUtils.notifier.notify(params, cb);
+  afterCreate: function(model, done) {
+    if (model.silent === true) return done();
+    Notification.create({
+      action: 'volunteer.create.thanks',
+      model: model
+    }, done);
   },
 
-  beforeDestroy: function (values, cb){
-   Volunteer.findOne({ id: values.where.id }).exec(function(err, volunteer) {
-      if (err) cb(err);
-      var params = {
-      trigger: {
-        callerType: 'Task',
-        callerId: volunteer.taskId,
-        action: 'taskVolunteerRemoved'
-      },
-      data: {
-        audience: {
-          'taskVolunteer': {
-            fields: {
-              //we set volunteer id to userid because the look up is labeled wrong
-              //        and says it expects volunteerId but really it's using userId
-              //        for a where on the user model
-                taskId: volunteer.taskId,
-                userId: volunteer.userId,
-                volunteerId: volunteer.userId
-            }
-          }
-        }
-      }
-    };
-    noteUtils.notifier.notify(params, cb);
-   });
+  afterDestroy: function(model, done) {
+    Notification.create({
+      action: 'volunteer.destroy.decline',
+      // Sails returns an array of deleted models,
+      // but we're only deleting them one at a time
+      model: model[0]
+    }, done);
   }
 };

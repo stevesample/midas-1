@@ -7,14 +7,16 @@ var BaseView = require('../../../../base/base_view');
 var CommentListController = require('../../../comments/list/controllers/comment_list_controller');
 var AttachmentView = require('../../../attachment/views/attachment_show_view');
 var TaskItemView = require('../views/task_item_view');
-var TagShowView = require('../../../tag/show/views/tag_show_view');
+var TagFactory = require('../../../../components/tag_factory');
 var ModalComponent = require('../../../../components/modal');
 var ModalAlert = require('../../../../components/modal_alert');
 var TaskEditFormView = require('../../edit/views/task_edit_form_view');
 var UIConfig = require('../../../../config/ui.json');
+var LoginConfig = require('../../../../config/login.json');
 var VolunteerSupervisorNotifyTemplate = require('../templates/volunteer_supervisor_notify_template.html');
 var VolunteerTextTemplate = require('../templates/volunteer_text_template.html');
-var ChangeStateTemplate = require('../templates/change_state_template.html');
+var ChangeStateTemplate = require('../templates/change_state_template.html')
+var UpdateLocationAgencyTemplate = require('../templates/update_location_agency_template.html');
 var UpdateNameTemplate = require('../templates/update_name_template.html');
 var CopyTaskTemplate = require('../templates/copy_task_template.html');
 
@@ -30,7 +32,6 @@ var TaskShowController = BaseView.extend({
     'keyup .validate'                 : 'v',
     'click #task-edit'                : 'edit',
     'click #task-view'                : 'view',
-    "click #like-button"              : 'like',
     'click #volunteer'                : 'volunteer',
     'click #volunteered'              : 'volunteered',
     "click #task-close"               : "stateChange",
@@ -38,8 +39,8 @@ var TaskShowController = BaseView.extend({
     "click #task-copy"                : "copy",
     "click .link-backbone"            : linkBackbone,
     "click .delete-volunteer"         : 'removeVolunteer',
-    "mouseenter .project-people-div"  : popovers.popoverPeopleOn,
-    "click .project-people-div"       : popovers.popoverClick
+    "mouseenter .project-people-show-div"  : popovers.popoverPeopleOn,
+    "click .project-people-show-div"       : popovers.popoverClick
   },
 
   initialize: function (options) {
@@ -50,7 +51,7 @@ var TaskShowController = BaseView.extend({
 
     //load user settings so they are available as needed
     this.getUserSettings(window.cache.currentUser);
-
+    this.tagFactory = new TagFactory;
   },
 
   initializeEdit: function () {
@@ -82,7 +83,7 @@ var TaskShowController = BaseView.extend({
 
     if (this.taskEditFormView) this.taskEditFormView.cleanup();
     this.taskEditFormView = new TaskEditFormView({
-      el: '.edit-task-section',
+      el: '.edit-task-container',
       elVolunteer: '#task-volunteers',
       edit: true,
       taskId: this.model.attributes.id,
@@ -94,7 +95,7 @@ var TaskShowController = BaseView.extend({
     this.$(".task-show-madlib").hide();
     this.$(".li-task-view").show();
     this.$(".li-task-edit").hide();
-    this.$(".task-view").hide();
+    this.$(".task-container").hide();
     this.$(".li-task-copy").hide();
   },
 
@@ -103,7 +104,6 @@ var TaskShowController = BaseView.extend({
 
     this.listenTo(this.model, 'task:show:render:done', function () {
       self.initializeHandlers();
-      self.initializeLikes();
 
       if (window.cache.currentUser) {
         self.initializeVolunteers();
@@ -111,9 +111,9 @@ var TaskShowController = BaseView.extend({
 
       if (self.options.action == 'edit') {
         self.initializeEdit();
-        popovers.popoverPeopleInit(".project-people-div");
+        popovers.popoverPeopleInit(".project-people-show-div");
       } else {
-        popovers.popoverPeopleInit(".project-people-div");
+        popovers.popoverPeopleInit(".project-people-show-div");
         if (self.commentListController) self.commentListController.cleanup();
         self.commentListController = new CommentListController({
           target: 'task',
@@ -123,34 +123,14 @@ var TaskShowController = BaseView.extend({
         self.attachmentView = new AttachmentView({
           target: 'task',
           id: this.model.attributes.id,
+          state: this.model.attributes.state,
           owner: this.model.attributes.isOwner,
+          volunteer: this.model.attributes.volunteer,
           el: '.attachment-wrapper'
         }).render();
       }
 
-      if (self.tagView) self.tagView.cleanup();
-      self.tagView = new TagShowView({
-        model: self.model,
-        el: '.tag-wrapper',
-        target: 'task',
-        targetId: 'taskId',
-        edit: false
-      }).render();
-
     });
-  },
-
-  initializeLikes: function () {
-    $("#like-number").text(this.model.attributes.likeCount);
-    if (parseInt(this.model.attributes.likeCount) === 1) {
-      $("#like-text").text($("#like-text").data('singular'));
-    } else {
-      $("#like-text").text($("#like-text").data('plural'));
-    }
-    if (this.model.attributes.like) {
-      $("#like-button-icon").removeClass('fa fa-star-o');
-      $("#like-button-icon").addClass('fa fa-star');
-    }
   },
 
   initializeVolunteers: function () {
@@ -211,47 +191,6 @@ var TaskShowController = BaseView.extend({
     Backbone.history.navigate('tasks/' + this.model.id, { trigger: true });
   },
 
-  like: function (e) {
-    if (e.preventDefault) e.preventDefault();
-    var self = this;
-    var child = $(e.currentTarget).children("#like-button-icon");
-    var likenumber = $("#like-number");
-    // Not yet liked, initiate like
-    if (child.hasClass('fa-star-o')) {
-      child.removeClass('fa-star-o');
-      child.addClass('fa-star');
-      likenumber.text(parseInt(likenumber.text()) + 1);
-      if (parseInt(likenumber.text()) === 1) {
-        $("#like-text").text($("#like-text").data('singular'));
-      } else {
-        $("#like-text").text($("#like-text").data('plural'));
-      }
-      $.ajax({
-        url: '/api/like/liket/' + this.model.attributes.id
-      }).done( function (data) {
-        // liked!
-        // response should be the like object
-        // console.log(data.id);
-      });
-    }
-    // Liked, initiate unlike
-    else {
-      child.removeClass('fa-star');
-      child.addClass('fa-star-o');
-      likenumber.text(parseInt(likenumber.text()) - 1);
-      if (parseInt(likenumber.text()) === 1) {
-        $("#like-text").text($("#like-text").data('singular'));
-      } else {
-        $("#like-text").text($("#like-text").data('plural'));
-      }
-      $.ajax({
-        url: '/api/like/unliket/' + this.model.attributes.id
-      }).done( function (data) {
-        // un-liked!
-        // response should be null (empty)
-      });
-    }
-  },
   getUserSettings: function (userId) {
     //does this belong somewhere else?
     if ( _.isNull(userId) ){ return null; }
@@ -326,6 +265,9 @@ var TaskShowController = BaseView.extend({
       var self = this;
       var child = $(e.currentTarget).children("#like-button-icon");
       var originalEvent = e;
+      var requiredTags = window.cache.currentUser.tags.filter(function(t) { return t.type === 'location' || t.type === 'agency'; });
+      var agencyRequired = (LoginConfig.agency && LoginConfig.agency.enabled);
+      var locationRequired = (LoginConfig.location && LoginConfig.location.enabled);
 
       if (this.modalAlert) { this.modalAlert.cleanup(); }
       if (this.modalComponent) { this.modalComponent.cleanup(); }
@@ -350,13 +292,64 @@ var TaskShowController = BaseView.extend({
             $.ajax({
               url: '/api/user/' + window.cache.currentUser.id,
               method: 'PUT',
-              data: { name: name }
+              data: {
+                username: window.cache.currentUser.username,
+                name: name
+              }
             }).done(function(user) {
               window.cache.currentUser.name = user.name;
               self.volunteer(originalEvent);
             });
           }
         }).render();
+        return;
+      }
+      // If user's profile doesn't location, ask them to enter one
+      // Includes  quick check to make sure these fields are required
+      else if (requiredTags.length !== 2 && (agencyRequired && locationRequired)) {
+        var modalContent = _.template(UpdateLocationAgencyTemplate)({});
+        this.modalComponent = new ModalComponent({
+          el: "#modal-volunteer",
+          id: "update-profile",
+          modalTitle: "Please complete your profile"
+        }).render();
+        this.modalAlert = new ModalAlert({
+          el: "#update-profile .modal-template",
+          modalDiv: '#update-profile',
+          content: modalContent,
+          validateBeforeSubmit: true,
+          cancel: i18n.t('volunteerModal.cancel'),
+          submit: i18n.t('volunteerModal.ok'),
+          callback: function(e) {
+            var agency = $('#ragency').select2('data');
+            var location = $('#rlocation').select2('data');
+            var data = {};
+            data.username = window.cache.currentUser.username;
+            data.tags = [agency, location].map(function(t) {
+              return { id: t.id };
+            });
+            $.ajax({
+              url: '/api/user/' + window.cache.currentUser.id,
+              method: 'PUT',
+              data: data
+            }).done(function(user) {
+              window.cache.currentUser.tags = user.tags;
+              self.volunteer(originalEvent);
+            });
+          }
+        }).render();
+        self.tagFactory.createTagDropDown({
+          type:"location",
+          selector:"#rlocation",
+          width: "100%",
+          multiple: false
+        });
+        self.tagFactory.createTagDropDown({
+          type:"agency",
+          selector:"#ragency",
+          width: "100%",
+          multiple: false
+        });
         return;
       }
 
